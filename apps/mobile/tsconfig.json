@@ -1,0 +1,39 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@gastrovoyage/shared": [
+        "../../packages/shared/src/index.ts"
+      ],
+      "@gastrovoyage/shared/*": [
+        "../../packages/shared/src/*"
+      ]
+    },
+    "types": [
+      "expo",
+      "nativewind/types"
+    ]
+  },
+  "include": [
+    "src/**/*",
+    "*.ts",
+    "*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ]
+}

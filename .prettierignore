@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+.next
+.expo
+coverage
+*.lock
+pnpm-lock.yaml
+packages/shared/src/supabase/types.generated.ts
+packages/shared/src/data/countries.json

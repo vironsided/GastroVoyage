@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.expo/
+.expo-shared/
+*.tsbuildinfo
+
+# Native
+ios/
+android/
+*.keystore
+
+# Testing
+coverage/
+*.lcov
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Generated types (uncomment if you prefer to regenerate)
+# packages/shared/src/supabase/types.generated.ts

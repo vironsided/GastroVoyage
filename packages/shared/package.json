@@ -1,0 +1,26 @@
+{
+  "name": "@gastrovoyage/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared types, theme tokens, Supabase clients, and country data for GastroVoyage.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./supabase": "./src/supabase/index.ts",
+    "./domain": "./src/domain/index.ts",
+    "./constants": "./src/constants/index.ts",
+    "./data/countries.json": "./src/data/countries.json",
+    "./data/world-shapes.json": "./src/data/world-shapes.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
