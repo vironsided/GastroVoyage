@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -1915,13 +1914,19 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
   @override
   Widget build(BuildContext context) {
     final config = widget.config;
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    // Flutter's Dialog already pushes itself above the keyboard via
+    // MediaQuery.viewInsets, so we don't double-add bottom inset here.
+    // When the keyboard takes more vertical space than the dialog needs,
+    // the inner SingleChildScrollView lets content scroll instead of
+    // overflowing — fixes the iOS "BOTTOM OVERFLOWED" red banner.
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.fromLTRB(GS.s24, GS.s24, GS.s24, GS.s24 + bottom),
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: GS.s24,
+        vertical: GS.s24,
+      ),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(GS.s24, GS.s24, GS.s24, GS.s20),
         decoration: BoxDecoration(
           color: config.surface,
           borderRadius: BorderRadius.circular(GS.r24),
@@ -1934,10 +1939,12 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(GS.s24, GS.s24, GS.s24, GS.s20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // Ink-stamp style warning crest.
             Center(
               child: Transform.rotate(
@@ -2103,7 +2110,8 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
                 ),
               ],
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
