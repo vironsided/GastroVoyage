@@ -1,54 +1,94 @@
-# Dependencies
-node_modules/
-.pnpm-store/
-
-# Environment
+# ─── Secrets (NEVER commit) ───────────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
-!.env.example
+**/.env
+**/.env.local
+backend/.env
+mobile/.env
 
-# Build outputs
-dist/
+# ─── Build outputs ────────────────────────────────────────────────────────────
 build/
-out/
-.next/
-.expo/
-.expo-shared/
-*.tsbuildinfo
+**/build/
+dist/
+**/dist/
+*.apk
+*.aab
+*.ipa
+*.app
+*.dSYM.zip
 
-# Native
-ios/
-android/
-*.keystore
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+venv/
+.venv/
+env/
 
-# Testing
-coverage/
-*.lcov
+# ─── Flutter / Dart ───────────────────────────────────────────────────────────
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+**/ios/Flutter/.last_build_id
+**/.last_build_id
+generated_plugin_registrant.dart
+**/ios/Pods/
+**/ios/.symlinks/
 
-# Logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Editor
-.vscode/
-!.vscode/extensions.json
-!.vscode/settings.json.example
+# ─── IDE / Editors ────────────────────────────────────────────────────────────
 .idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
 *.swp
+.atom/
+.buildlog/
+.history/
+
+# ─── Android Studio noise ─────────────────────────────────────────────────────
+local.properties
+key.properties
+**/*.keystore
+**/*.jks
+captures/
+.gradle/
+
+# ─── Logs / scratch ───────────────────────────────────────────────────────────
+*.log
+*.out
+*.tmp
+bugreport-*.zip
+
+# ─── Claude tooling ───────────────────────────────────────────────────────────
+.claude/
+
+# ─── Working screenshots from emulator sessions (not project deliverables) ────
+# Component reference images stay; transient debug captures get filtered.
+mobile/assets/components/a*.png
+mobile/assets/components/a*_s.png
+mobile/assets/components/b*.png
+mobile/assets/components/b*_s.png
+mobile/assets/components/p*.png
+mobile/assets/components/p*_s.png
+mobile/assets/components/sr*.png
+mobile/assets/components/sb*.png
+mobile/assets/components/*_s.png
+
+# ─── Misc transient artefacts ─────────────────────────────────────────────────
+Untitled.pdf
+*.cache
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Supabase
-supabase/.branches/
-supabase/.temp/
-
-# Generated types (uncomment if you prefer to regenerate)
-# packages/shared/src/supabase/types.generated.ts
+# ─── Session transcripts (one-off, not project files) ─────────────────────────
+2026-*-this-session-is-being-continued*.txt
+**/2026-*-this-session-is-being-continued*.txt

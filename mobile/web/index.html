@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="GastroVoyage — your culinary passport. Stamp every country, every cuisine, every plate.">
+  <meta name="theme-color" content="#0E0E0E">
+
+  <!-- Viewport: iPhone notch-safe, no auto-zoom on focus, full-screen feel. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+  <!-- iOS: behave like a standalone PWA when launched from Home Screen. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GastroVoyage">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- Apple touch icons — Safari uses these for the home-screen tile. -->
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/Icon-512.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/Icon-512.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>GastroVoyage</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body { background: #0E0E0E; margin: 0; padding: 0; overscroll-behavior: none; }
+    /* Initial splash matches the app's dark scrapbook palette so the white
+       flash between page load and Flutter boot is replaced with a quiet,
+       on-brand backdrop. The "G" mark and tagline fade away once Flutter
+       renders its real splash. */
+    #boot {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px;
+      background: #0E0E0E; color: #FAF1E1; font-family: -apple-system, system-ui, sans-serif;
+      transition: opacity 320ms ease-out;
+    }
+    #boot.hidden { opacity: 0; pointer-events: none; }
+    #boot .mark {
+      font-family: 'Times New Roman', serif; font-weight: 700; font-size: 56px;
+      letter-spacing: 1px; color: #D11A2A;
+    }
+    #boot .tag { font-size: 11px; letter-spacing: 3px; opacity: 0.6; text-transform: uppercase; }
+    #boot .spinner {
+      margin-top: 24px; width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid rgba(250,241,225,0.18); border-top-color: #D11A2A;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="boot">
+    <div class="mark">G</div>
+    <div class="tag">Gastro · Voyage</div>
+    <div class="spinner"></div>
+  </div>
+
+  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // Hide the bootstrap splash once Flutter has painted its first frame.
+    window.addEventListener('flutter-first-frame', () => {
+      const boot = document.getElementById('boot');
+      if (boot) { boot.classList.add('hidden'); setTimeout(() => boot.remove(), 400); }
+    });
+  </script>
+</body>
+</html>

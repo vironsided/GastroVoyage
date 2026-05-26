@@ -1,0 +1,25 @@
+# Render.com blueprint for the GastroVoyage backend.
+#
+# Render reads this file when you create a new "Blueprint" service pointed at
+# the repo. It provisions a free-tier web service with the right build & start
+# commands. Push the repo to GitHub first, then in the Render dashboard pick
+# "New +" → "Blueprint" → select this repo and Render does the rest.
+#
+# The free tier sleeps after ~15 min of inactivity. The first request after
+# sleep takes ~30 s to wake — this is acceptable for personal testing.
+services:
+  - type: web
+    name: gastrovoyage-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      # If your auth module uses additional env vars (JWT_SECRET, etc.) add
+      # them here with `sync: false` so Render prompts you to fill them in
+      # the dashboard without committing secrets to the repo.

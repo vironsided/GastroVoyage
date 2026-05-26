@@ -1,0 +1,72 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def mapsApiKey = localProperties.getProperty("maps.api.key", "")
+
+// Sign in with Apple — the Android web-auth callback intent-filter data.
+// These are NOT secrets: they're the host/path of the Service ID's redirect
+// URI (the Supabase auth callback). Configure them in android/local.properties:
+//   apple.auth.scheme=https
+//   apple.auth.host=<project-ref>.supabase.co
+//   apple.auth.path=/auth/v1/callback
+// The "applinks" placeholder defaults keep the manifest merge valid (and the
+// intent-filter inert) until they're set.
+def appleAuthScheme = localProperties.getProperty("apple.auth.scheme", "applinks")
+def appleAuthHost = localProperties.getProperty("apple.auth.host", "gastrovoyage.invalid")
+def appleAuthPath = localProperties.getProperty("apple.auth.path", "/sign-in-with-apple")
+
+android {
+    namespace = "com.example.mobile"
+    compileSdk = 35
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        applicationId = "com.example.mobile"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // sign_in_with_apple (Custom Tabs web flow) and google_sign_in both
+        // require API 21+; pin it explicitly so the OAuth plugins build.
+        minSdk = Math.max(21, flutter.minSdkVersion)
+        targetSdk = 35
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        manifestPlaceholders["appleAuthScheme"] = appleAuthScheme
+        manifestPlaceholders["appleAuthHost"] = appleAuthHost
+        manifestPlaceholders["appleAuthPath"] = appleAuthPath
+    }
+
+    buildTypes {
+        release {
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}

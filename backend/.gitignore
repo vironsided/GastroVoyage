@@ -1,0 +1,12 @@
+# Secrets — backend-specific double-guard so `.env` never leaks from this dir.
+.env
+.env.local
+.env.*.local
+
+# Python caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+venv/
+.venv/
