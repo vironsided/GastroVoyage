@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     # Example: "https://gastrovoyage.app,https://staging.gastrovoyage.app"
     cors_origins: str = "http://localhost:*,http://10.0.2.2:*,http://127.0.0.1:*"
 
+    # Optional regex pattern matched against the Origin header. Lets us accept
+    # ephemeral Vercel preview URLs without redeploying every time. Example:
+    #   r"https://gastrovoyage(-[a-z0-9]+)?\.vercel\.app"
+    cors_origin_regex: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
