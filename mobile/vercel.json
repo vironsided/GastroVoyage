@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "flutter build web --release --dart-define=API_URL=$API_URL",
+  "installCommand": "echo skip-install",
+  "buildCommand": "bash ./vercel-build.sh",
   "outputDirectory": "build/web",
-  "installCommand": "if cd flutter; then git pull && cd ..; else git clone https://github.com/flutter/flutter.git -b stable --depth 1; fi && export PATH=\"$PATH:$PWD/flutter/bin\" && flutter precache --web && flutter pub get",
   "framework": null,
   "headers": [
     {
