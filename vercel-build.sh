@@ -7,7 +7,11 @@
 # `outputDirectory`.
 set -euo pipefail
 
-FLUTTER_VERSION="${FLUTTER_VERSION:-stable}"
+# Pinned to the exact Flutter version the project was developed against.
+# Bumping this past 3.24.x breaks the build because `lucide_icons 0.257.0`
+# extends `IconData`, which Flutter 3.44+ marked `final`. Move to a maintained
+# icon package (e.g. `lucide_icons_flutter`) before bumping the SDK.
+FLUTTER_VERSION="${FLUTTER_VERSION:-3.24.5}"
 FLUTTER_DIR="$PWD/.flutter-sdk"
 
 echo "──> Setting up Flutter SDK ($FLUTTER_VERSION)..."
