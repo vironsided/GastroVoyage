@@ -67,32 +67,50 @@ class EditorialHeaderSliver extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Top bar: avatar + luggage tag ──────────────────────
-                Row(
+                // ── Top bar: avatar | centred wordmark | search + bell ──
+                // Classic mobile-app pattern: identity on the left, brand
+                // mark visually centred, action icons hugging the right edge.
+                // A Stack lets the wordmark sit at the exact horizontal
+                // centre of the row even when the left and right groups
+                // have different widths (avatar is 44 px, search+bell is
+                // ~98 px); a plain Row with Expanded would only centre
+                // within the gap, biasing the wordmark to the right.
+                Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Stack(
-                      clipBehavior: Clip.none,
+                    // Centred wordmark (under the action icons in the stack
+                    // so taps on the icons still go to them).
+                    _LuggageTag(config: config),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _AvatarButton(
-                          initial: initial,
-                          avatarUrl: avatarUrl,
-                          config: config,
-                          onTap: () => _openSettings(context),
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            _AvatarButton(
+                              initial: initial,
+                              avatarUrl: avatarUrl,
+                              config: config,
+                              onTap: () => _openSettings(context),
+                            ),
+                            if (config.mode == GastroThemeMode.guys)
+                              const Positioned(
+                                top: -22,
+                                right: -10,
+                                child: AnimatedPlumbob(size: 30),
+                              ),
+                          ],
                         ),
-                        if (config.mode == GastroThemeMode.guys)
-                          const Positioned(
-                            top: -22,
-                            right: -10,
-                            child: AnimatedPlumbob(size: 30),
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _SearchButton(config: config),
+                            const SizedBox(width: GS.s10),
+                            _NotificationBell(config: config),
+                          ],
+                        ),
                       ],
                     ),
-                    const Spacer(),
-                    _SearchButton(config: config),
-                    const SizedBox(width: GS.s10),
-                    _NotificationBell(config: config),
-                    const SizedBox(width: GS.s10),
-                    _LuggageTag(config: config),
                   ],
                 )
                     .animate()
