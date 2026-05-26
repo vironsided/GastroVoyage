@@ -14,6 +14,7 @@ import 'widgets/editorial_header.dart';
 import 'widgets/journey_feature_card.dart';
 import 'widgets/next_bite_card.dart';
 import 'widgets/passport_card.dart';
+import 'widgets/we_together_card.dart';
 import 'widgets/scrapbook_bits.dart';
 import 'widgets/visit_card.dart';
 import 'widgets/wrapped_card.dart';
@@ -92,6 +93,10 @@ class DashboardScreen extends ConsumerWidget {
                     GS.s20, 0, GS.s20, GS.navBuffer),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
+                    // "We Together" — couple hero card. Self-hides when the
+                    // user has no active couple link (returns SizedBox.shrink).
+                    WeTogetherCard(config: config),
+
                     // Passport card.
                     profileAsync.when(
                       data: (p) => PassportCard(profile: p, config: config)

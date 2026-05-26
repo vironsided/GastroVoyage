@@ -127,6 +127,17 @@ async def delete_account(user_id: str = Depends(current_user_id)):
     except Exception:
         pass
 
+    # Couple link — best-effort. Migration 014. Wipe rows from both sides so
+    # a deleted user doesn't leave a dangling partner FK in the couples table.
+    try:
+        sb.table("couples").delete().eq("partner_a_id", user_id).execute()
+    except Exception:
+        pass
+    try:
+        sb.table("couples").delete().eq("partner_b_id", user_id).execute()
+    except Exception:
+        pass
+
     # Notifications are best-effort: the table may not exist on every
     # environment (migration 007). Wipe both directions — rows addressed to
     # the user AND rows where they were the actor — so no notification is

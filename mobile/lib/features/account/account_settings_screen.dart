@@ -8,12 +8,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:mobile/app/gastro_theme_config.dart';
 import 'package:mobile/app/gs_design.dart';
 import 'package:mobile/app/providers.dart';
 import 'package:mobile/features/auth/login_screen.dart';
 import 'package:mobile/features/badges/achievements_screen.dart';
+import 'package:mobile/features/couples/data/couple_models.dart';
+import 'package:mobile/features/couples/data/couple_providers.dart';
+import 'package:mobile/features/couples/my_couple_screen.dart';
 import 'package:mobile/features/notifications/data/notifications_providers.dart';
 import 'package:mobile/features/notifications/notifications_screen.dart';
 import 'package:mobile/features/onboarding/theme_selector_screen.dart';
@@ -264,6 +268,35 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
     );
   }
 
+  /// Opens the partner-linking screen. Invalidates the couple providers on
+  /// return so subtitle / dashboard card reflect any new state immediately.
+  Future<void> _openCouple() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyCoupleScreen()),
+    );
+    if (!mounted) return;
+    ref.invalidate(myCoupleProvider);
+    ref.invalidate(coupleStatsProvider);
+  }
+
+  /// Short scrapbook-tone subtitle that mirrors the couple state — so the
+  /// user reads their status without opening the screen.
+  String _coupleSubtitle(WidgetRef ref) {
+    final couple = ref.watch(myCoupleProvider).valueOrNull;
+    if (couple == null) return 'Link with the person you taste with';
+    switch (couple.status) {
+      case CoupleStatus.accepted:
+        return 'You & ${couple.partner.name}';
+      case CoupleStatus.pending:
+        return couple.isIncomingPendingForViewer
+            ? '${couple.partner.name} wants to be your couple'
+            : 'Waiting for ${couple.partner.name}…';
+      case CoupleStatus.ended:
+        return 'Link with the person you taste with';
+    }
+  }
+
   void _openAchievements() {
     Navigator.push(
       context,
@@ -276,6 +309,45 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
       context,
       MaterialPageRoute(builder: (_) => const StoriesFeedScreen()),
     );
+  }
+
+  /// Opens the native share-sheet with a copy-pasteable invite text and a
+  /// deep link back to the current user's public passport. On web (PWA) this
+  /// uses the Web Share API; on mobile it goes through UIActivityViewController
+  /// (iOS) or ACTION_SEND (Android).
+  Future<void> _shareProfile(BuildContext context, WidgetRef ref) async {
+    final auth = ref.read(authProvider);
+    final userId = auth.userId;
+    final name = (auth.displayName?.trim().isNotEmpty == true)
+        ? auth.displayName!.trim()
+        : 'A friend';
+
+    if (userId == null || userId.isEmpty) {
+      // Not signed in — shouldn't be possible from this screen, but bail
+      // safely instead of sharing a broken link.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in first to share your profile.')),
+      );
+      return;
+    }
+
+    final link = 'https://gastro-voyage.vercel.app/u/$userId';
+    final text =
+        "Find $name on GastroVoyage — every country, every cuisine, every plate.\n"
+        "Search “$name” in the app, or open: $link";
+
+    try {
+      await Share.share(text, subject: '$name on GastroVoyage');
+    } catch (_) {
+      // Some web browsers reject Share when the user gesture context is
+      // gone — copy to clipboard so the action still has a useful outcome.
+      await Clipboard.setData(ClipboardData(text: text));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Copied invite to clipboard.')),
+        );
+      }
+    }
   }
 
   /// Opens the inbox and re-pulls the unread count when the user returns —
@@ -604,6 +676,14 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
 
                   _SectionCard(config: config, index: 2, children: [
                     _SettingsTile(
+                      icon: Icons.favorite_outline,
+                      label: 'My Couple',
+                      subtitle: _coupleSubtitle(ref),
+                      config: config,
+                      onTap: _openCouple,
+                    ),
+                    _Divider(config: config),
+                    _SettingsTile(
                       icon: Icons.group_outlined,
                       label: 'Friends & Followers',
                       subtitle: 'Find travellers, manage requests',
@@ -658,7 +738,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                       label: 'Share Profile',
                       subtitle: 'Let friends see your passport',
                       config: config,
-                      onTap: () {},
+                      onTap: () => _shareProfile(context, ref),
                     ),
                     _Divider(config: config),
                     _SettingsTile(

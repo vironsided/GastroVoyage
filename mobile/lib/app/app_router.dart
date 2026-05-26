@@ -14,6 +14,7 @@ import 'package:mobile/app/providers.dart';
 import 'package:mobile/features/dashboard/dashboard_screen.dart';
 import 'package:mobile/features/explore/explore_screen.dart';
 import 'package:mobile/features/map/map_screen.dart';
+import 'package:mobile/features/social/public_passport_screen.dart';
 import 'package:mobile/features/vault/vault_screen.dart';
 
 final appRouter = GoRouter(
@@ -21,6 +22,20 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/',
       builder: (_, __) => const _ShellScreen(),
+    ),
+    // Deep-link to a user's public passport. The "Share Profile" button on
+    // the Account screen generates URLs of the form
+    // `https://gastro-voyage.vercel.app/u/{userId}` — Vercel's catch-all
+    // rewrite serves index.html and GoRouter picks the link up here.
+    // Recipient must be authenticated; an unauthenticated open routes back
+    // to `/` (the auth-gate in main.dart will then show the login screen).
+    GoRoute(
+      path: '/u/:userId',
+      builder: (context, state) {
+        final userId = state.pathParameters['userId'] ?? '';
+        if (userId.isEmpty) return const _ShellScreen();
+        return PublicPassportScreen(userId: userId);
+      },
     ),
   ],
 );

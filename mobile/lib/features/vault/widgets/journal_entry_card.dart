@@ -108,6 +108,7 @@ class _JournalEntryCardState extends State<JournalEntryCard> {
                         region: region,
                         rating: visit.rating,
                         notes: visit.notes,
+                        withPartner: visit.withPartner,
                       ),
                     ),
                   ),
@@ -297,6 +298,7 @@ class _ClippingCard extends StatelessWidget {
     required this.region,
     required this.rating,
     required this.notes,
+    required this.withPartner,
   });
 
   final GastroThemeConfig config;
@@ -305,6 +307,10 @@ class _ClippingCard extends StatelessWidget {
   final String region;
   final int rating;
   final String notes;
+
+  /// Render a small "♥ with partner" chip under the title when this visit
+  /// was tagged together with the current user's couple link.
+  final bool withPartner;
 
   @override
   Widget build(BuildContext context) {
@@ -376,6 +382,26 @@ class _ClippingCard extends StatelessWidget {
                               region: region,
                               rating: rating,
                             ),
+                            if (withPartner)
+                              Padding(
+                                padding: const EdgeInsets.only(top: GS.s4),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.favorite_rounded,
+                                        size: 13, color: config.accent),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'together with my partner',
+                                      style: GoogleFonts.caveat(
+                                        fontSize: 15,
+                                        color: config.accent,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             if (notes.isNotEmpty)
                               _NotesBlock(config: config, notes: notes),
                           ],

@@ -42,6 +42,7 @@ async def create_visit(
     service_rating: int | None = Body(default=None),
     value_rating: int | None = Body(default=None),
     dish_rating: int | None = Body(default=None),
+    with_partner: bool | None = Body(default=None),
     user_id: str = Depends(current_user_id),
 ):
     sb = get_supabase()
@@ -70,14 +71,25 @@ async def create_visit(
         if value is not None:
             row[key] = value
 
+    # with_partner — migration 015. Same defensive retry pattern.
+    if with_partner is not None:
+        row["with_partner"] = bool(with_partner)
+
     try:
         res = sb.table("visits").insert(row).execute()
     except Exception as e:
-        # If the schema cache rejects the new columns (migration 013 not run),
-        # retry without them so the legacy flow still works.
+        # If the schema cache rejects the new columns (migrations 013/015 not
+        # run), retry without them so the legacy flow still works.
         msg = str(e).lower()
-        if any(k in msg for k in ("atmosphere_rating", "service_rating", "value_rating", "dish_rating")):
-            for k in ("atmosphere_rating", "service_rating", "value_rating", "dish_rating"):
+        optional_cols = (
+            "atmosphere_rating",
+            "service_rating",
+            "value_rating",
+            "dish_rating",
+            "with_partner",
+        )
+        if any(k in msg for k in optional_cols):
+            for k in optional_cols:
                 row.pop(k, None)
             res = sb.table("visits").insert(row).execute()
         else:
@@ -99,6 +111,7 @@ async def update_visit(
     service_rating: int | None = Body(default=None),
     value_rating: int | None = Body(default=None),
     dish_rating: int | None = Body(default=None),
+    with_partner: bool | None = Body(default=None),
     user_id: str = Depends(current_user_id),
 ):
     sb = get_supabase()
@@ -138,6 +151,10 @@ async def update_visit(
         if value is not None:
             updates[key] = value
 
+    # with_partner flag — migration 015. Retried-without on schema miss.
+    if with_partner is not None:
+        updates["with_partner"] = bool(with_partner)
+
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
@@ -151,8 +168,15 @@ async def update_visit(
         )
     except Exception as e:
         msg = str(e).lower()
-        if any(k in msg for k in ("atmosphere_rating", "service_rating", "value_rating", "dish_rating")):
-            for k in ("atmosphere_rating", "service_rating", "value_rating", "dish_rating"):
+        optional_cols = (
+            "atmosphere_rating",
+            "service_rating",
+            "value_rating",
+            "dish_rating",
+            "with_partner",
+        )
+        if any(k in msg for k in optional_cols):
+            for k in optional_cols:
                 updates.pop(k, None)
             if not updates:
                 raise HTTPException(status_code=400, detail="No fields to update")

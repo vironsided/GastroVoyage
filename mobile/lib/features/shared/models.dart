@@ -55,6 +55,7 @@ class Visit {
     this.serviceRating,
     this.valueRating,
     this.dishRating,
+    this.withPartner = false,
   });
 
   final String id;
@@ -77,6 +78,10 @@ class Visit {
   final int? valueRating;
   final int? dishRating;
 
+  /// True when this visit was tagged "we were together" — counts toward
+  /// couple stats and shows a heart badge in the journal/passport.
+  final bool withPartner;
+
   /// True when at least one sub-rating is filled in — the UI uses this to
   /// decide whether to show the four-pip strip on cards.
   bool get hasSubRatings =>
@@ -98,6 +103,7 @@ class Visit {
         serviceRating: (j['service_rating'] as num?)?.toInt(),
         valueRating: (j['value_rating'] as num?)?.toInt(),
         dishRating: (j['dish_rating'] as num?)?.toInt(),
+        withPartner: j['with_partner'] as bool? ?? false,
         country: j['countries'] != null
             ? Country.fromJson(j['countries'] as Map<String, dynamic>)
             : null,

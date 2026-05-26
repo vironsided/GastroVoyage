@@ -13,6 +13,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/app/gastro_theme_config.dart';
 import 'package:mobile/app/providers.dart';
 import 'package:mobile/features/baku/data/baku_restaurant.dart';
+import 'package:mobile/features/couples/data/couple_models.dart';
+import 'package:mobile/features/couples/data/couple_providers.dart';
 import 'package:mobile/features/explore/dish_catalog.dart';
 import 'package:mobile/features/explore/ingredient_images.dart';
 import 'package:mobile/features/shared/models.dart';
@@ -52,6 +54,10 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
   int? _service;
   int? _value;
   int? _dish;
+
+  /// "We were together" tag — only meaningful when the user has an active
+  /// couple link. Stored on the visit row (migration 015 `with_partner`).
+  bool _withPartner = false;
 
   @override
   void dispose() {
@@ -105,6 +111,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
       _service = null;
       _value = null;
       _dish = null;
+      _withPartner = false;
     });
   }
 
@@ -127,6 +134,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
       _service = visit.serviceRating;
       _value = visit.valueRating;
       _dish = visit.dishRating;
+      _withPartner = visit.withPartner;
     });
   }
 
@@ -172,6 +180,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
         serviceRating: _service,
         valueRating: _value,
         dishRating: _dish,
+        withPartner: _withPartner ? true : null,
       );
       _invalidateAll();
       if (mounted) {
@@ -212,6 +221,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
         serviceRating: _service,
         valueRating: _value,
         dishRating: _dish,
+        withPartner: _withPartner,
       );
       _invalidateAll();
       if (mounted) {
@@ -520,6 +530,8 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
                       service: _service,
                       valueRating: _value,
                       dish: _dish,
+                      withPartner: _withPartner,
+                      partner: ref.watch(myCoupleProvider).valueOrNull,
                       onRating: (r) => setState(() => _rating = r),
                       onDate: (d) => setState(() => _date = d),
                       onPickPhoto: _pickPhoto,
@@ -533,6 +545,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
                       onService: (v) => setState(() => _service = v),
                       onValue: (v) => setState(() => _value = v),
                       onDish: (v) => setState(() => _dish = v),
+                      onWithPartner: (v) => setState(() => _withPartner = v),
                       onCancel: () => setState(() {
                         _showLogForm = false;
                         _showEditForm = false;
@@ -884,6 +897,8 @@ class _VisitForm extends StatelessWidget {
     required this.service,
     required this.valueRating,
     required this.dish,
+    required this.withPartner,
+    required this.partner,
     required this.onRating,
     required this.onDate,
     required this.onPickPhoto,
@@ -893,6 +908,7 @@ class _VisitForm extends StatelessWidget {
     required this.onService,
     required this.onValue,
     required this.onDish,
+    required this.onWithPartner,
     required this.onCancel,
     required this.onSave,
   });
@@ -922,6 +938,15 @@ class _VisitForm extends StatelessWidget {
   final int? valueRating;
   final int? dish;
 
+  /// "We were together" toggle. Only meaningful when [partner] is non-null
+  /// and active — the toggle is hidden otherwise so single users don't see
+  /// a confusing orphan checkbox.
+  final bool withPartner;
+
+  /// Current accepted couple link, or null/pending. Drives the heart-toggle
+  /// visibility.
+  final Couple? partner;
+
   final ValueChanged<int> onRating;
   final ValueChanged<DateTime> onDate;
   final VoidCallback onPickPhoto;
@@ -931,6 +956,7 @@ class _VisitForm extends StatelessWidget {
   final ValueChanged<int?> onService;
   final ValueChanged<int?> onValue;
   final ValueChanged<int?> onDish;
+  final ValueChanged<bool> onWithPartner;
   final VoidCallback onCancel;
   final VoidCallback onSave;
 
@@ -1066,6 +1092,17 @@ class _VisitForm extends StatelessWidget {
               options: restaurantOptions,
               selected: restaurantName,
               onSelect: onRestaurant,
+            ),
+          ],
+          // "We were together" — only when an active couple link exists.
+          // Hidden otherwise so singles never see a confusing orphan toggle.
+          if (partner != null && partner!.status == CoupleStatus.accepted) ...[
+            const SizedBox(height: 16),
+            _WithPartnerToggle(
+              config: config,
+              value: withPartner,
+              partnerName: partner!.partner.name,
+              onChanged: onWithPartner,
             ),
           ],
           const SizedBox(height: 16),
@@ -1372,6 +1409,80 @@ class _SubRatingRow extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── "We were together" toggle ───────────────────────────────────────────────
+
+/// Heart-shaped toggle that marks the current visit as eaten together with
+/// the user's partner. Only rendered when there's an accepted couple link
+/// (the visit form keeps it hidden otherwise).
+class _WithPartnerToggle extends StatelessWidget {
+  const _WithPartnerToggle({
+    required this.config,
+    required this.value,
+    required this.partnerName,
+    required this.onChanged,
+  });
+
+  final GastroThemeConfig config;
+  final bool value;
+  final String partnerName;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: value ? config.accentSoft : config.surfaceVariant,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: value ? config.accent : config.outlineVariant,
+            width: value ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              value ? Icons.favorite_rounded : Icons.favorite_outline_rounded,
+              size: 22,
+              color: value ? config.accent : config.onSurfaceVariant,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'We were together',
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: config.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value
+                        ? 'Counts as a joint bite with $partnerName.'
+                        : "Tap if you ate this with $partnerName.",
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 12,
+                      color: config.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

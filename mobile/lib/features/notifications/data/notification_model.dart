@@ -15,6 +15,9 @@ enum NotificationType {
   storyComment,
   journeyWeek,
   badgeEarned,
+  coupleInvite,
+  coupleAccepted,
+  coupleEnded,
   unknown,
 }
 
@@ -36,6 +39,12 @@ extension NotificationTypeX on NotificationType {
         return 'journey_week';
       case NotificationType.badgeEarned:
         return 'badge_earned';
+      case NotificationType.coupleInvite:
+        return 'couple_invite';
+      case NotificationType.coupleAccepted:
+        return 'couple_accepted';
+      case NotificationType.coupleEnded:
+        return 'couple_ended';
       case NotificationType.unknown:
         return 'unknown';
     }
@@ -60,6 +69,12 @@ extension NotificationTypeX on NotificationType {
         return NotificationType.journeyWeek;
       case 'badge_earned':
         return NotificationType.badgeEarned;
+      case 'couple_invite':
+        return NotificationType.coupleInvite;
+      case 'couple_accepted':
+        return NotificationType.coupleAccepted;
+      case 'couple_ended':
+        return NotificationType.coupleEnded;
       default:
         return NotificationType.unknown;
     }

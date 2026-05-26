@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mobile/features/couples/data/couple_models.dart';
 import 'package:mobile/features/notifications/data/notification_model.dart';
 import 'package:mobile/features/shared/models.dart';
 import 'package:mobile/features/social/data/social_models.dart';
@@ -259,6 +260,7 @@ class ApiClient {
     int? serviceRating,
     int? valueRating,
     int? dishRating,
+    bool? withPartner,
   }) async {
     final data = <String, dynamic>{
       'country_id': countryId,
@@ -274,6 +276,7 @@ class ApiClient {
     if (serviceRating != null) data['service_rating'] = serviceRating;
     if (valueRating != null) data['value_rating'] = valueRating;
     if (dishRating != null) data['dish_rating'] = dishRating;
+    if (withPartner != null) data['with_partner'] = withPartner;
     final res = await _dio.post('/visits', data: data);
     return Visit.fromJson(res.data as Map<String, dynamic>);
   }
@@ -289,6 +292,7 @@ class ApiClient {
     int? serviceRating,
     int? valueRating,
     int? dishRating,
+    bool? withPartner,
   }) async {
     final data = <String, dynamic>{};
     if (notes != null) data['notes'] = notes;
@@ -302,6 +306,7 @@ class ApiClient {
     if (serviceRating != null) data['service_rating'] = serviceRating;
     if (valueRating != null) data['value_rating'] = valueRating;
     if (dishRating != null) data['dish_rating'] = dishRating;
+    if (withPartner != null) data['with_partner'] = withPartner;
     final res = await _dio.patch('/visits/$visitId', data: data);
     return Visit.fromJson(res.data as Map<String, dynamic>);
   }
@@ -667,6 +672,50 @@ class ApiClient {
     final data = (res.data as Map<String, dynamic>?) ?? const {};
     final weeks = (data['completed_weeks'] as num?)?.toInt() ?? clamped;
     return weeks < 0 ? 0 : weeks;
+  }
+
+  // ── Couples: partner linking ───────────────────────────────────────────────
+
+  /// Fetches the current user's active couple (pending or accepted), or null
+  /// when unlinked. A not-yet-migrated backend returns null instead of 500.
+  Future<Couple?> myCouple() async {
+    final res = await _dio.get('/couples/me');
+    final data = (res.data as Map<String, dynamic>?) ?? const {};
+    final raw = data['couple'];
+    if (raw is Map<String, dynamic>) {
+      return Couple.fromJson(raw);
+    }
+    return null;
+  }
+
+  /// Send a couple invite to another user. Backend rejects when either side
+  /// is already linked (409) — caller should surface that to the UI.
+  Future<void> invitePartner(String targetUserId) async {
+    await _dio.post('/couples/invite/$targetUserId');
+  }
+
+  /// Accept the pending incoming invite, if any. 404 when there's nothing to
+  /// accept, 403 when the viewer is the inviter (only invitee can accept).
+  Future<void> acceptCouple() async {
+    await _dio.post('/couples/accept');
+  }
+
+  /// Decline the pending incoming invite. Marks the row 'ended' server-side.
+  Future<void> declineCouple() async {
+    await _dio.post('/couples/decline');
+  }
+
+  /// Unlink the current active couple. No-op when there isn't one.
+  Future<void> unlinkCouple() async {
+    await _dio.delete('/couples/me');
+  }
+
+  /// Combined stats for the current couple. Reports `active: false` when
+  /// there's no accepted link, so the dashboard card knows to hide itself.
+  Future<CoupleStats> coupleStats() async {
+    final res = await _dio.get('/couples/stats');
+    return CoupleStats.fromJson(
+        (res.data as Map<String, dynamic>?) ?? const {});
   }
 
   // ── Notifications inbox ─────────────────────────────────────────────────────

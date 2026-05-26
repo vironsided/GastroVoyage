@@ -10,6 +10,7 @@ import 'package:mobile/app/gs_design.dart';
 import 'package:mobile/app/providers.dart';
 import 'package:mobile/features/badges/achievements_screen.dart';
 import 'package:mobile/features/couples/couples_journey_screen.dart';
+import 'package:mobile/features/couples/my_couple_screen.dart';
 import 'package:mobile/features/notifications/data/notification_model.dart';
 import 'package:mobile/features/notifications/data/notifications_providers.dart';
 import 'package:mobile/features/social/public_passport_screen.dart';
@@ -108,6 +109,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AchievementsScreen()),
+        );
+        break;
+      case NotificationType.coupleInvite:
+      case NotificationType.coupleAccepted:
+      case NotificationType.coupleEnded:
+        // All three route to the My Couple screen, which already renders the
+        // right state (pending invite / accepted card / unlinked CTA).
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MyCoupleScreen()),
         );
         break;
       case NotificationType.unknown:
@@ -338,6 +349,12 @@ class _NotificationRowState extends State<_NotificationRow> {
           return 'Badge earned: $title';
         }
         return 'A new badge is yours';
+      case NotificationType.coupleInvite:
+        return '$actorName wants to be your couple';
+      case NotificationType.coupleAccepted:
+        return '$actorName accepted your couple invite';
+      case NotificationType.coupleEnded:
+        return '$actorName unlinked your couple';
       case NotificationType.unknown:
         return 'Something happened';
     }
@@ -366,6 +383,12 @@ class _NotificationRowState extends State<_NotificationRow> {
         return 'another stamp in the book';
       case NotificationType.badgeEarned:
         return 'pin it to your passport';
+      case NotificationType.coupleInvite:
+        return 'tap to accept or decline';
+      case NotificationType.coupleAccepted:
+        return 'you two are official';
+      case NotificationType.coupleEnded:
+        return 'your joint stats reset';
       case NotificationType.unknown:
         return 'tap for details';
     }
@@ -395,6 +418,11 @@ class _NotificationRowState extends State<_NotificationRow> {
         break;
       case NotificationType.storyComment:
         icon = LucideIcons.messageCircle;
+        break;
+      case NotificationType.coupleInvite:
+      case NotificationType.coupleAccepted:
+      case NotificationType.coupleEnded:
+        icon = LucideIcons.heart;
         break;
       case NotificationType.unknown:
         icon = LucideIcons.bell;
