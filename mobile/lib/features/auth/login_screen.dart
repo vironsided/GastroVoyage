@@ -130,6 +130,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     Future.delayed(const Duration(milliseconds: 350), () {
       if (mounted) _formAnimCtrl.forward();
     });
+
+    // Wake the backend while the user is still tapping the form. Render's
+    // free tier puts the service to sleep after 15 minutes of inactivity;
+    // a cold boot is 30–60s. Kicking off a /health ping now overlaps that
+    // wake-up with the time it takes the user to type email + password, so
+    // by the time they hit "Sign in" the backend is already responding.
+    _pingBackend();
+  }
+
+  /// Fire-and-forget warm-up call. Failures are ignored — this is purely a
+  /// latency optimisation, not a reachability check.
+  Future<void> _pingBackend() async {
+    try {
+      await ref.read(apiClientProvider).healthCheck();
+    } catch (_) {
+      // Swallow — the real login call below will surface any actual error.
+    }
   }
 
   @override
@@ -156,9 +173,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (e is DioException) {
       if (e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
-          e.type == DioExceptionType.sendTimeout ||
-          e.type == DioExceptionType.connectionError) {
-        return 'Cannot connect to server. Check your connection.';
+          e.type == DioExceptionType.sendTimeout) {
+        // On Render-free the server may be cold-starting. Tell the user
+        // exactly that so they don't think their connection is broken.
+        return 'Server is waking up — give it a moment and try again.';
+      }
+      if (e.type == DioExceptionType.connectionError) {
+        return 'Cannot reach the server. Check your connection.';
       }
       final status = e.response?.statusCode;
       final detail = e.response?.data is Map

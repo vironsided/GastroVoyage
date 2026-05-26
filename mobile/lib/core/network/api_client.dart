@@ -70,8 +70,12 @@ class ApiClient {
         _dio = Dio(
           BaseOptions(
             baseUrl: baseUrl ?? _kDefaultBaseUrl,
-            connectTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 10),
+            // Generous timeouts so a Render-free cold start (~30–60s after
+            // 15min of idle) doesn't surface as "Cannot connect to server".
+            // Warm requests still complete in <1s on the normal happy path.
+            connectTimeout: const Duration(seconds: 60),
+            receiveTimeout: const Duration(seconds: 60),
+            sendTimeout: const Duration(seconds: 60),
           ),
         ) {
     _dio.interceptors.add(InterceptorsWrapper(
@@ -328,6 +332,13 @@ class ApiClient {
   }
 
   // ── Auth (no token required) ────────────────────────────────────────────────
+
+  /// Lightweight ping used to wake a sleeping backend (Render free spins down
+  /// after 15 minutes of inactivity). Caller should treat any exception as a
+  /// no-op — this is a latency hint, not a connectivity probe.
+  Future<void> healthCheck() async {
+    await _dio.get('/health');
+  }
 
   Future<AuthResult> signUp({
     required String email,
