@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile/features/notifications/data/notification_model.dart';
 import 'package:mobile/features/shared/models.dart';
 import 'package:mobile/features/social/data/social_models.dart';
@@ -320,15 +321,49 @@ class ApiClient {
 
   // ── Uploads ─────────────────────────────────────────────────────────────────
 
-  Future<String> uploadPhoto(File file) async {
+  /// Upload a picked photo. Accepts an [XFile] so it works identically on
+  /// native (`xfile.path` is a real filesystem path) and web (`xfile.path`
+  /// is a blob: URL we can't open through `dart:io`). Internally we read
+  /// the bytes through [XFile.readAsBytes] and send a `MultipartFile.fromBytes`
+  /// so the call path is platform-agnostic.
+  Future<String> uploadPhoto(XFile xfile) async {
+    final bytes = await xfile.readAsBytes();
+    final filename = xfile.name.isNotEmpty ? xfile.name : 'upload.jpg';
+    // Pick a content-type the backend will accept. XFile.mimeType is
+    // sometimes empty (image_picker on iOS web in particular), so fall back
+    // to inferring from the extension.
+    final mime = (xfile.mimeType?.isNotEmpty ?? false)
+        ? xfile.mimeType!
+        : _mimeFromFilename(filename);
     final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(
-        file.path,
-        filename: file.uri.pathSegments.last,
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: DioMediaType.parse(mime),
       ),
     });
     final res = await _dio.post('/uploads', data: formData);
     return res.data['url'] as String;
+  }
+
+  /// Map a filename to one of the MIME types the backend's `/uploads`
+  /// route allows. Falls back to `image/jpeg` since that's by far the most
+  /// common gallery format and matches the backend's default.
+  String _mimeFromFilename(String filename) {
+    final ext = filename.toLowerCase().split('.').last;
+    switch (ext) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+      case 'heif':
+        return 'image/heic';
+      case 'jpg':
+      case 'jpeg':
+      default:
+        return 'image/jpeg';
+    }
   }
 
   // ── Auth (no token required) ────────────────────────────────────────────────

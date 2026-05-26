@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -186,8 +184,10 @@ class _AddStoryBubbleState extends ConsumerState<_AddStoryBubble> {
     try {
       final api = ref.read(apiClientProvider);
 
-      // 1) Upload the picked photo to get a hosted URL.
-      final photoUrl = await api.uploadPhoto(File(picked.path));
+      // 1) Upload the picked photo to get a hosted URL. Pass the XFile
+      // directly so the upload works on both native and web (where
+      // `File.fromUri(blob:...)` is not supported).
+      final photoUrl = await api.uploadPhoto(picked);
       if (!mounted) return;
 
       // 2) Caption sheet — null means the user dismissed it.

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -30,7 +31,12 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
   bool _showEditForm = false;
   bool _saving = false;
   bool _pickingPhoto = false;
-  File? _pickedPhoto;
+  // Picked photo as an XFile so we can read bytes on web (where File from
+  // dart:io can't wrap the picker's blob: URL) and as a real file on native.
+  XFile? _pickedPhoto;
+  // Cached preview bytes — populated when the picker returns so the local
+  // preview shows immediately without re-reading the XFile on every rebuild.
+  Uint8List? _pickedPhotoBytes;
   final _notesCtrl = TextEditingController();
   int _rating = 5;
   DateTime _date = DateTime.now();
@@ -92,6 +98,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
       _rating = 5;
       _date = DateTime.now();
       _pickedPhoto = null;
+      _pickedPhotoBytes = null;
       _editingVisit = null;
       _restaurantName = null;
       _atmosphere = null;
@@ -110,6 +117,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
       _rating = visit.rating;
       _date = _parseDate(visit.visitedOn);
       _pickedPhoto = null;
+      _pickedPhotoBytes = null;
       // Keep the picked restaurant only if it still matches an existing option.
       final options = _bakuRestaurantsForCountry.map((r) => r.name).toSet();
       _restaurantName = options.contains(visit.restaurantName)
@@ -131,8 +139,14 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
         imageQuality: 85,
         maxWidth: 1600,
       );
-      if (xfile != null && mounted) {
-        setState(() => _pickedPhoto = File(xfile.path));
+      if (xfile != null) {
+        final bytes = await xfile.readAsBytes();
+        if (mounted) {
+          setState(() {
+            _pickedPhoto = xfile;
+            _pickedPhotoBytes = bytes;
+          });
+        }
       }
     } finally {
       if (mounted) setState(() => _pickingPhoto = false);
@@ -164,6 +178,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
         setState(() {
           _showLogForm = false;
           _pickedPhoto = null;
+          _pickedPhotoBytes = null;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Visit logged!')),
@@ -495,7 +510,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
                       notesCtrl: _notesCtrl,
                       rating: _rating,
                       date: _date,
-                      pickedPhoto: _pickedPhoto,
+                      pickedPhotoBytes: _pickedPhotoBytes,
                       pickingPhoto: _pickingPhoto,
                       saving: _saving,
                       isEdit: _showEditForm,
@@ -508,7 +523,10 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
                       onRating: (r) => setState(() => _rating = r),
                       onDate: (d) => setState(() => _date = d),
                       onPickPhoto: _pickPhoto,
-                      onClearPhoto: () => setState(() => _pickedPhoto = null),
+                      onClearPhoto: () => setState(() {
+                        _pickedPhoto = null;
+                        _pickedPhotoBytes = null;
+                      }),
                       onRestaurant: (name) =>
                           setState(() => _restaurantName = name),
                       onAtmosphere: (v) => setState(() => _atmosphere = v),
@@ -856,7 +874,7 @@ class _VisitForm extends StatelessWidget {
     required this.notesCtrl,
     required this.rating,
     required this.date,
-    required this.pickedPhoto,
+    required this.pickedPhotoBytes,
     required this.pickingPhoto,
     required this.saving,
     required this.isEdit,
@@ -883,7 +901,9 @@ class _VisitForm extends StatelessWidget {
   final TextEditingController notesCtrl;
   final int rating;
   final DateTime date;
-  final File? pickedPhoto;
+  // Preview bytes for a freshly-picked photo. Decoupled from any File so the
+  // form renders identically on native and web.
+  final Uint8List? pickedPhotoBytes;
   final bool pickingPhoto;
   final bool saving;
   final bool isEdit;
@@ -950,18 +970,18 @@ class _VisitForm extends StatelessWidget {
           GestureDetector(
             onTap: onPickPhoto,
             child: Container(
-              height: pickedPhoto != null ? 120 : 72,
+              height: pickedPhotoBytes != null ? 120 : 72,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 color: config.surfaceVariant,
                 border: Border.all(color: config.outlineVariant),
               ),
               clipBehavior: Clip.antiAlias,
-              child: pickedPhoto != null
+              child: pickedPhotoBytes != null
                   ? Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.file(pickedPhoto!, fit: BoxFit.cover),
+                        Image.memory(pickedPhotoBytes!, fit: BoxFit.cover),
                         Positioned(
                           top: 6,
                           right: 6,

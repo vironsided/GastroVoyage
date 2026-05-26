@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -1415,8 +1416,10 @@ class _EditProfileSheet extends ConsumerStatefulWidget {
 class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
   bool _saving = false;
 
-  /// Locally-picked file, shown immediately while still on disk.
-  File? _pickedFile;
+  /// Locally-picked image bytes, shown immediately for feedback. We use bytes
+  /// rather than a `File` so the same code path works on web (where the
+  /// picker returns a blob URL not a real filesystem path).
+  Uint8List? _pickedBytes;
 
   /// Public URL after a successful upload — what gets persisted.
   String? _uploadedUrl;
@@ -1444,11 +1447,11 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
         return;
       }
       HapticFeedback.selectionClick();
-      final file = File(picked.path);
-      // Show the local file straight away for instant feedback.
-      if (mounted) setState(() => _pickedFile = file);
-      // Upload in the background; the resulting URL is what we persist.
-      final url = await ref.read(apiClientProvider).uploadPhoto(file);
+      // Read bytes once — works on both native and web. The preview shows
+      // immediately via Image.memory; the upload re-uses the same XFile.
+      final bytes = await picked.readAsBytes();
+      if (mounted) setState(() => _pickedBytes = bytes);
+      final url = await ref.read(apiClientProvider).uploadPhoto(picked);
       if (mounted) {
         setState(() {
           _uploadedUrl = url;
@@ -1460,7 +1463,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
         setState(() {
           _pickingAvatar = false;
           _avatarError = true;
-          _pickedFile = null;
+          _pickedBytes = null;
         });
       }
     }
@@ -1537,7 +1540,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
               child: _AvatarPicker(
                 config: config,
                 initial: widget.initial,
-                pickedFile: _pickedFile,
+                pickedBytes: _pickedBytes,
                 existingUrl: widget.initialAvatarUrl,
                 busy: _pickingAvatar,
                 onTap: _pickAvatar,
@@ -1629,7 +1632,7 @@ class _AvatarPicker extends StatelessWidget {
     required this.initial,
     required this.onTap,
     required this.busy,
-    this.pickedFile,
+    this.pickedBytes,
     this.existingUrl,
   });
 
@@ -1637,7 +1640,9 @@ class _AvatarPicker extends StatelessWidget {
   final String initial;
   final VoidCallback onTap;
   final bool busy;
-  final File? pickedFile;
+  // In-memory image bytes for a freshly-picked photo. Works on both native
+  // and web (where File from dart:io can't be constructed for a blob URL).
+  final Uint8List? pickedBytes;
   final String? existingUrl;
 
   @override
@@ -1689,8 +1694,8 @@ class _AvatarPicker extends StatelessWidget {
 
   Widget _photo() {
     final Widget base;
-    if (pickedFile != null) {
-      base = Image.file(pickedFile!, fit: BoxFit.cover);
+    if (pickedBytes != null) {
+      base = Image.memory(pickedBytes!, fit: BoxFit.cover);
     } else if (existingUrl != null && existingUrl!.isNotEmpty) {
       base = CachedNetworkImage(
         imageUrl: existingUrl!,
