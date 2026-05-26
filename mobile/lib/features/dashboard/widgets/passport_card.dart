@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -13,8 +12,7 @@ import 'package:mobile/ui/ui.dart';
 import 'scrapbook_bits.dart';
 
 /// The "Culinary Passport" hero card — a passport-page styled progress panel
-/// with a mode accent strip, a progress ring, a faux postmark and a wax seal
-/// pressed onto the corner.
+/// with a mode accent strip, a progress ring, and a faux postmark.
 class PassportCard extends StatelessWidget {
   const PassportCard({
     super.key,
@@ -30,34 +28,30 @@ class PassportCard extends StatelessWidget {
     final progress = profile.totalCountries > 0
         ? profile.visitedCount / profile.totalCountries
         : 0.0;
-    final initial = profile.displayName.isNotEmpty
-        ? profile.displayName[0].toUpperCase()
-        : 'E';
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          margin: const EdgeInsets.only(top: GS.s20),
-          decoration: BoxDecoration(
-            color: config.surface,
-            borderRadius: BorderRadius.circular(GS.r24),
-            border: Border.all(color: config.outlineVariant, width: 0.5),
-            boxShadow: GS.shadow(
-              color: config.accent,
-              blur: 28,
-              yOffset: 12,
-              opacity: config.isDark ? 0.18 : 0.10,
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(GS.r24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ModeAccentBar(config: config),
-                Padding(
-                  padding: const EdgeInsets.all(GS.s24),
+    // Plain Container — no outer Stack and no top margin. The previous
+    // wax-seal sticker needed the Stack (for the Positioned overlay) and the
+    // GS.s20 top margin (for the seal to protrude). Both are gone now.
+    return Container(
+      decoration: BoxDecoration(
+        color: config.surface,
+        borderRadius: BorderRadius.circular(GS.r24),
+        border: Border.all(color: config.outlineVariant, width: 0.5),
+        boxShadow: GS.shadow(
+          color: config.accent,
+          blur: 28,
+          yOffset: 12,
+          opacity: config.isDark ? 0.18 : 0.10,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(GS.r24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ModeAccentBar(config: config),
+            Padding(
+              padding: const EdgeInsets.all(GS.s24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -199,32 +193,9 @@ class PassportCard extends StatelessWidget {
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
+          ],
         ),
-
-        // ── Wax seal pressed onto the top-right corner ────────────────────
-        Positioned(
-          top: 2,
-          right: -8,
-          child: WaxSeal(
-            config: config,
-            size: 56,
-            label: initial,
-            rotation: -0.18,
-          )
-              .animate()
-              .fadeIn(duration: GS.slow, delay: GS.stagger(2))
-              .scale(
-                begin: const Offset(1.5, 1.5),
-                end: const Offset(1, 1),
-                duration: GS.slow,
-                delay: GS.stagger(2),
-                curve: GS.smooth,
-              ),
-        ),
-      ],
+      ),
     );
   }
 }
