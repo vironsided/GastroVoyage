@@ -15,11 +15,12 @@ import random
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.notifications import enqueue_notification
 from app.core.auth import current_user_id
 from app.core.supabase_client import get_supabase
+from app.services.ai_client import AI_MODEL, get_anthropic_client
 
 router = APIRouter(prefix="/couples", tags=["couples"])
 
@@ -526,3 +527,136 @@ async def date_night(user_id: str = Depends(current_user_id)):
         },
         "reason": "ok",
     }
+
+
+# ─── Couple Wrapped — Spotify-style year-in-review narrative ─────────────────
+
+
+class CoupleWrappedScene(BaseModel):
+    """One paragraph + a stat the UI renders as a swipeable card."""
+    title: str = Field(description="3-5 word scrapbook-y title for this scene")
+    body: str = Field(description="One short paragraph addressed to 'you two' (60-120 words)")
+    stat_label: str | None = Field(
+        default=None,
+        description="Short uppercase mono-spaced label for the headline stat, or null",
+    )
+    stat_value: str | None = Field(
+        default=None,
+        description="The headline stat value (number, country name, or short phrase), or null",
+    )
+
+
+class CoupleWrapped(BaseModel):
+    """Multi-scene Wrapped — Mobile pages through scenes like Instagram stories."""
+    headline: str = Field(description="2-line top headline addressed to the couple")
+    scenes: list[CoupleWrappedScene] = Field(min_length=3, max_length=6)
+    closing: str = Field(description="One affectionate closing sentence")
+
+
+@router.get("/wrapped", response_model=CoupleWrapped)
+async def couple_wrapped(user_id: str = Depends(current_user_id)):
+    """Generate a multi-scene Wrapped recap for the couple.
+
+    Pulls every joint visit (capped at 80 for prompt size), aggregates
+    cuisines + countries + top-rated visits, and asks Claude to compose
+    a 4-5 scene story addressed to 'you two'. Each scene is one swipeable
+    card on Mobile.
+
+    Requires migration 015 (visits.with_partner) to be applied — degrades
+    to 409 when no joint visits exist yet.
+    """
+    sb = get_supabase()
+    couple = _fetch_active_couple(sb, user_id)
+    if not couple or couple["status"] != "accepted":
+        raise HTTPException(409, "No active couple — link a partner first.")
+
+    partner_id = (
+        couple["partner_b_id"]
+        if couple["partner_a_id"] == user_id
+        else couple["partner_a_id"]
+    )
+
+    try:
+        res = (
+            sb.table("visits")
+            .select(
+                "rating, atmosphere_rating, dish_rating, value_rating, "
+                "service_rating, notes, restaurant_name, visited_on, "
+                "countries(name, subregion, region, flag_emoji)"
+            )
+            .in_("user_id", [user_id, partner_id])
+            .eq("with_partner", True)
+            .order("visited_on", desc=True)
+            .limit(80)
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(503, f"Could not load joint visits: {e}") from e
+
+    rows = res.data or []
+    if len(rows) < 3:
+        raise HTTPException(
+            409,
+            "Log at least 3 joint visits before unwrapping a Wrapped — "
+            "your story needs material to work from.",
+        )
+
+    # Compact summary — keep prompt small even with 80 visits.
+    countries: dict[str, int] = {}
+    cuisines: dict[str, int] = {}
+    top_lines: list[str] = []
+    for r in rows:
+        c = r.get("countries") or {}
+        name = c.get("name") or "?"
+        countries[name] = countries.get(name, 0) + 1
+        sub = c.get("subregion") or c.get("region")
+        if sub:
+            cuisines[sub] = cuisines.get(sub, 0) + 1
+        rating = r.get("rating") or 0
+        if rating >= 5:
+            note = (r.get("notes") or "").strip()[:60]
+            restaurant = (r.get("restaurant_name") or "").strip()
+            tag = f"at {restaurant}" if restaurant else ""
+            top_lines.append(f"  - {name} 5/5 {tag} {('· ' + note) if note else ''}".strip())
+
+    summary = (
+        f"Total joint visits: {len(rows)}\n"
+        f"Distinct countries: {len(countries)}\n"
+        f"Distinct cuisines: {len(cuisines)}\n"
+        f"Top countries: {', '.join(sorted(countries, key=countries.get, reverse=True)[:5])}\n"
+        f"Top cuisines: {', '.join(sorted(cuisines, key=cuisines.get, reverse=True)[:5])}\n"
+        f"Standout 5/5 plates (up to 5):\n" + "\n".join(top_lines[:5])
+    )
+
+    client = get_anthropic_client()
+    try:
+        response = client.messages.parse(
+            model=AI_MODEL,
+            max_tokens=4000,
+            thinking={"type": "adaptive"},
+            system=(
+                "You write a multi-scene 'Couple Wrapped' for two people on "
+                "GastroVoyage. The tone is warm, scrapbook, lightly poetic — "
+                "think a handwritten travel journal. Address the couple as "
+                "'you two'. Each scene is a swipeable card. Vary the angle "
+                "per scene — e.g. the count, the cuisine they leaned into, "
+                "the standout plate, the country that surprised them, the "
+                "throughline. Never mention specific dates; refer to time as "
+                "'this stretch' or 'lately'. No emoji in body text."
+            ),
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Material to build the Wrapped from:\n\n{summary}\n\n"
+                        "Compose 4-5 distinct scenes plus a top headline and "
+                        "a closing line."
+                    ),
+                }
+            ],
+            output_format=CoupleWrapped,
+        )
+    except Exception as e:
+        raise HTTPException(502, f"Claude call failed: {e}") from e
+
+    return response.parsed_output

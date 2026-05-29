@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mobile/features/ai/data/ai_models.dart';
 import 'package:mobile/features/couples/data/couple_models.dart';
 import 'package:mobile/features/notifications/data/notification_model.dart';
 import 'package:mobile/features/shared/models.dart';
@@ -726,6 +727,74 @@ class ApiClient {
     final res = await _dio.get('/couples/date-night');
     return DateNightPick.fromResponse(
         (res.data as Map<String, dynamic>?));
+  }
+
+  // ── AI-powered endpoints (Claude Opus 4.7 backed) ────────────────────────
+  //
+  // All of these talk to the `/ai/*` routes (plus `/couples/wrapped`). They
+  // can take noticeably longer than non-AI endpoints — 4-10 seconds is
+  // normal — so call sites should always show a loading indicator and
+  // never block the user's primary scroll.
+
+  /// AI-generated Date Night card. Replaces the random `coupleDateNight()`
+  /// pick with a specific dish + prep outline + reason for tonight. Returns
+  /// 409 when the viewer has no active couple. Long-running (~6-10s).
+  Future<AiDateNight> aiDateNight() async {
+    final res = await _dio.get(
+      '/ai/date-night',
+      options: Options(receiveTimeout: const Duration(seconds: 45)),
+    );
+    return AiDateNight.fromJson(
+        (res.data as Map<String, dynamic>?) ?? const {});
+  }
+
+  /// Three Claude-recommended cuisines based on the viewer's past visits.
+  /// 409 when there's nothing to recommend from yet (no logged visits).
+  Future<AiCuisineRecommendations> aiCuisineRecommendations() async {
+    final res = await _dio.get(
+      '/ai/cuisine-recommendations',
+      options: Options(receiveTimeout: const Duration(seconds: 45)),
+    );
+    return AiCuisineRecommendations.fromJson(
+        (res.data as Map<String, dynamic>?) ?? const {});
+  }
+
+  /// Send a dish photo and get Claude vision's best guess at dish +
+  /// likely cuisine + suggested rating breakdown, used to pre-fill the
+  /// visit form. Sends raw bytes via multipart to avoid the dart:io File
+  /// path issue on web blob: URLs.
+  Future<AiVisitPhotoSuggestion> aiParseVisitPhoto(XFile xfile) async {
+    final bytes = await xfile.readAsBytes();
+    final filename = xfile.name.isNotEmpty ? xfile.name : 'photo.jpg';
+    final mime = (xfile.mimeType?.isNotEmpty ?? false)
+        ? xfile.mimeType!
+        : _mimeFromFilename(filename);
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: DioMediaType.parse(mime),
+      ),
+    });
+    final res = await _dio.post(
+      '/ai/parse-visit-photo',
+      data: formData,
+      options: Options(receiveTimeout: const Duration(seconds: 45)),
+    );
+    return AiVisitPhotoSuggestion.fromJson(
+        (res.data as Map<String, dynamic>?) ?? const {});
+  }
+
+  /// Couple Wrapped narrative — multi-scene year-in-review. Long-running
+  /// (10-20s) because the model writes 4-5 paragraphs. 409 when fewer than
+  /// 3 joint visits exist.
+  Future<CoupleWrapped> coupleWrapped() async {
+    final res = await _dio.get(
+      '/couples/wrapped',
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
+    );
+    return CoupleWrapped.fromJson(
+        (res.data as Map<String, dynamic>?) ?? const {});
   }
 
   // ── Notifications inbox ─────────────────────────────────────────────────────

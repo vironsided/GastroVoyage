@@ -154,10 +154,72 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
             _pickedPhoto = xfile;
             _pickedPhotoBytes = bytes;
           });
+          _offerAiAutofill(xfile);
         }
       }
     } finally {
       if (mounted) setState(() => _pickingPhoto = false);
+    }
+  }
+
+  /// Pop a SnackBar offering Claude vision auto-fill — non-blocking, easy
+  /// to dismiss. Only fires the AI call when the user opts in, so we never
+  /// burn tokens silently.
+  void _offerAiAutofill(XFile xfile) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        behavior: SnackBarBehavior.floating,
+        content: const Text('Let Claude pre-fill dish + ratings from this photo?'),
+        action: SnackBarAction(
+          label: 'Let AI suggest',
+          onPressed: () => _runAiAutofill(xfile),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _runAiAutofill(XFile xfile) async {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Claude is reading the photo…')),
+    );
+    try {
+      final suggestion =
+          await ref.read(apiClientProvider).aiParseVisitPhoto(xfile);
+      if (!mounted) return;
+      // Apply non-destructively: only fill empty fields, never clobber what
+      // the user already typed.
+      setState(() {
+        if (_notesCtrl.text.trim().isEmpty &&
+            (suggestion.suggestedNotes?.isNotEmpty ?? false)) {
+          _notesCtrl.text = suggestion.suggestedNotes!;
+        }
+        _dish ??= suggestion.suggestedDishRating;
+        _atmosphere ??= suggestion.suggestedAtmosphereRating;
+      });
+      messenger.hideCurrentSnackBar();
+      final dish = suggestion.dishName ?? 'this dish';
+      final conf = suggestion.confidence;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'AI: $dish · $conf confidence. Review and edit before saving.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+      final s = e.toString();
+      final msg = s.contains('503')
+          ? 'AI is not configured on this server yet.'
+          : s.contains('415')
+              ? 'Photo format not supported by AI.'
+              : 'AI auto-fill failed. Fill the form yourself.';
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 

@@ -6,6 +6,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile/app/gastro_theme_config.dart';
 import 'package:mobile/app/gs_design.dart';
 import 'package:mobile/app/providers.dart';
+import 'package:mobile/features/ai/data/ai_models.dart';
+import 'package:mobile/features/couples/couple_wrapped_screen.dart';
 import 'package:mobile/features/couples/data/couple_models.dart';
 import 'package:mobile/features/couples/data/couple_providers.dart';
 import 'package:mobile/features/notifications/data/notifications_providers.dart';
@@ -553,6 +555,10 @@ class _AcceptedView extends ConsumerWidget {
           ),
           orElse: () => const SizedBox.shrink(),
         ),
+
+        // ── Couple Wrapped CTA — full-card link to the AI-generated recap ────
+        const SizedBox(height: GS.s16),
+        _CoupleWrappedCta(config: config),
 
         const SizedBox(height: GS.s24),
         Text(
@@ -1136,7 +1142,7 @@ class _DateNightCard extends ConsumerStatefulWidget {
 }
 
 class _DateNightCardState extends ConsumerState<_DateNightCard> {
-  DateNightPick? _pick;
+  AiDateNight? _pick;
   bool _busy = false;
   String? _error;
 
@@ -1147,15 +1153,21 @@ class _DateNightCardState extends ConsumerState<_DateNightCard> {
       _error = null;
     });
     try {
-      final pick = await ref.read(apiClientProvider).coupleDateNight();
+      final pick = await ref.read(apiClientProvider).aiDateNight();
+      setState(() => _pick = pick);
+    } catch (e) {
       setState(() {
-        _pick = pick;
-        if (pick == null) {
+        final s = e.toString();
+        if (s.contains('409')) {
+          _error = 'Link a partner first to unlock Date Night.';
+        } else if (s.contains('404')) {
           _error = "You've tasted everything together — bold move.";
+        } else if (s.contains('503')) {
+          _error = 'AI is not configured on this server yet.';
+        } else {
+          _error = 'Could not cook up a suggestion. Try again.';
         }
       });
-    } catch (_) {
-      setState(() => _error = 'Could not pick a country. Try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1186,7 +1198,7 @@ class _DateNightCardState extends ConsumerState<_DateNightCard> {
               Icon(LucideIcons.zap, size: 14, color: config.accent),
               const SizedBox(width: GS.s6),
               Text(
-                'DATE NIGHT',
+                'DATE NIGHT · AI',
                 style: GoogleFonts.jetBrainsMono(
                   fontSize: 10,
                   letterSpacing: 1.4,
@@ -1199,9 +1211,9 @@ class _DateNightCardState extends ConsumerState<_DateNightCard> {
           const SizedBox(height: GS.s8),
           if (_pick == null && _error == null)
             Text(
-              "Can't decide what to cook? Let us pick one country for your next "
-              "shared bite — pulled from your wishlists, never one you've already "
-              "had together.",
+              "Can't decide what to cook? Let Claude pick a country and a "
+              "specific dish for tonight, with a 5-step prep outline — pulled "
+              "from your shared wishlists.",
               style: GoogleFonts.hankenGrotesk(
                 fontSize: 13,
                 height: 1.45,
@@ -1209,7 +1221,7 @@ class _DateNightCardState extends ConsumerState<_DateNightCard> {
               ),
             )
           else if (_pick != null)
-            _PickPreview(pick: _pick!, config: config)
+            _AiPickPreview(pick: _pick!, config: config)
           else
             Text(
               _error!,
@@ -1229,7 +1241,13 @@ class _DateNightCardState extends ConsumerState<_DateNightCard> {
                         strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(LucideIcons.sparkles, size: 16),
-            label: Text(_pick == null ? 'Surprise us' : 'Try another'),
+            label: Text(
+              _busy
+                  ? 'Cooking up an idea…'
+                  : _pick == null
+                      ? 'Surprise us'
+                      : 'Try another',
+            ),
             style: FilledButton.styleFrom(
               backgroundColor: config.accent,
               foregroundColor: Colors.white,
@@ -1249,61 +1267,122 @@ class _DateNightCardState extends ConsumerState<_DateNightCard> {
   }
 }
 
-class _PickPreview extends StatelessWidget {
-  const _PickPreview({required this.pick, required this.config});
-  final DateNightPick pick;
+/// Renders a full AI Date Night card: flag + dish title + headline tagline,
+/// "why tonight" reason in scrapbook prose, then a numbered prep checklist.
+class _AiPickPreview extends StatelessWidget {
+  const _AiPickPreview({required this.pick, required this.config});
+  final AiDateNight pick;
   final GastroThemeConfig config;
 
   @override
   Widget build(BuildContext context) {
     final flag = pick.flagEmoji?.trim();
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (flag != null && flag.isNotEmpty) ...[
-          Text(flag, style: const TextStyle(fontSize: 36)),
-          const SizedBox(width: GS.s10),
-        ],
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                pick.countryName,
-                style: GoogleFonts.playfairDisplay(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: config.onSurface,
-                  height: 1.1,
-                ),
-              ),
-              if (pick.cuisine != null && pick.cuisine!.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  pick.cuisine!,
-                  style: GoogleFonts.hankenGrotesk(
-                    fontSize: 13,
-                    color: config.onSurfaceVariant,
-                  ),
-                ),
-              ],
-              const SizedBox(height: GS.s4),
-              Text(
-                pick.fromWishlist
-                    ? 'pulled from your shared wishlist'
-                    : 'a new flag to chase together',
-                style: GoogleFonts.caveat(
-                  fontSize: 16,
-                  color: config.accent,
-                ),
-              ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (flag != null && flag.isNotEmpty) ...[
+              Text(flag, style: const TextStyle(fontSize: 36)),
+              const SizedBox(width: GS.s10),
             ],
-          ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    pick.dishName,
+                    style: GoogleFonts.playfairDisplay(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: config.onSurface,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${pick.countryName}${pick.cuisine != null && pick.cuisine!.isNotEmpty ? ' · ${pick.cuisine}' : ''}',
+                    style: GoogleFonts.hankenGrotesk(
+                      fontSize: 13,
+                      color: config.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
+        if (pick.headline.isNotEmpty) ...[
+          const SizedBox(height: GS.s10),
+          Text(
+            pick.headline,
+            style: GoogleFonts.caveat(
+              fontSize: 18,
+              color: config.accent,
+              height: 1.25,
+            ),
+          ),
+        ],
+        if (pick.whyTonight.isNotEmpty) ...[
+          const SizedBox(height: GS.s8),
+          Text(
+            pick.whyTonight,
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 13,
+              height: 1.5,
+              color: config.onSurfaceVariant,
+            ),
+          ),
+        ],
+        if (pick.prepSteps.isNotEmpty) ...[
+          const SizedBox(height: GS.s12),
+          Text(
+            'PREP IN 5 BEATS',
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 10,
+              letterSpacing: 1.4,
+              fontWeight: FontWeight.w700,
+              color: config.accent,
+            ),
+          ),
+          const SizedBox(height: GS.s6),
+          for (int i = 0; i < pick.prepSteps.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: GS.s4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 22,
+                    child: Text(
+                      '${i + 1}.',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 12,
+                        color: config.accent,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      pick.prepSteps[i],
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 13,
+                        height: 1.4,
+                        color: config.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ],
     );
   }
 }
+
 
 // ─── Annual goal — N cuisines this year together ────────────────────────────
 
@@ -1395,6 +1474,93 @@ class _AnnualGoalCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Couple Wrapped CTA — full-card link to the AI-generated recap ──────────
+
+class _CoupleWrappedCta extends StatelessWidget {
+  const _CoupleWrappedCta({required this.config});
+  final GastroThemeConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(GS.r20),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+              builder: (_) => const CoupleWrappedScreen()),
+        ),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(GS.s16, GS.s14, GS.s16, GS.s16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(GS.r20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                config.accent.withOpacity(0.25),
+                config.accent.withOpacity(0.08),
+              ],
+            ),
+            border: Border.all(color: config.accent.withOpacity(0.45)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: config.surface,
+                  borderRadius: BorderRadius.circular(GS.r12),
+                  border: Border.all(color: config.accent.withOpacity(0.5)),
+                ),
+                child: Icon(LucideIcons.sparkles, color: config.accent),
+              ),
+              const SizedBox(width: GS.s12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'COUPLE WRAPPED · AI',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 10,
+                        letterSpacing: 1.4,
+                        fontWeight: FontWeight.w700,
+                        color: config.accent,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Unwrap your journey',
+                      style: GoogleFonts.playfairDisplay(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: config.onSurface,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'A 4-scene story Claude writes from your joint visits.',
+                      style: GoogleFonts.hankenGrotesk(
+                        fontSize: 12,
+                        color: config.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right,
+                  color: config.onSurfaceVariant.withOpacity(0.7)),
+            ],
+          ),
+        ),
       ),
     );
   }

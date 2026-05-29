@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     #   r"https://gastrovoyage(-[a-z0-9]+)?\.vercel\.app"
     cors_origin_regex: str | None = None
 
+    # Anthropic API key for AI-powered features (date-night picker, cuisine
+    # recommendations, photo parsing, couple wrapped). Optional — every
+    # `/ai/...` endpoint degrades to a 503 when this is unset rather than
+    # crashing on import, so non-AI endpoints stay healthy on misconfigured
+    # environments.
+    anthropic_api_key: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

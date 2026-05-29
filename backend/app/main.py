@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    ai,
     auth,
     profile,
     countries,
@@ -41,6 +42,7 @@ app.include_router(social.router)
 app.include_router(couples.router)
 app.include_router(notifications.router)
 app.include_router(wishlist.router)
+app.include_router(ai.router)
 
 
 @app.get("/health")

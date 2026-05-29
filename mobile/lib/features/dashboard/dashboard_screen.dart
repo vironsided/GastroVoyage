@@ -8,6 +8,7 @@ import 'package:mobile/features/social/data/social_providers.dart';
 import 'package:mobile/ui/ui.dart';
 
 import 'widgets/badges_section.dart';
+import 'widgets/cuisine_recommendations_card.dart';
 import 'widgets/daily_dish_card.dart';
 import 'widgets/dashboard_stories_strip.dart';
 import 'widgets/editorial_header.dart';
@@ -137,6 +138,24 @@ class DashboardScreen extends ConsumerWidget {
                     // by day-of-year so all users + friends see the same
                     // dish on the same day). Pure mobile data, no backend.
                     DailyDishCard(config: config)
+                        .animate()
+                        .fadeIn(
+                            duration: GS.normal,
+                            delay: GS.stagger(2),
+                            curve: GS.smooth)
+                        .slideY(
+                            begin: 0.06,
+                            end: 0,
+                            duration: GS.normal,
+                            delay: GS.stagger(2),
+                            curve: GS.smooth),
+
+                    const SizedBox(height: GS.s20),
+
+                    // Featured: AI cuisine recommendations — lazy. Doesn't
+                    // call Claude until the user taps the card, so dashboard
+                    // load stays fast and free.
+                    CuisineRecommendationsCard(config: config)
                         .animate()
                         .fadeIn(
                             duration: GS.normal,
