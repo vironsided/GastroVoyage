@@ -92,12 +92,42 @@ class Couple {
       );
 }
 
+class CoupleFirstVisit {
+  const CoupleFirstVisit({
+    this.visitId,
+    this.restaurantName,
+    this.countryId,
+    this.countryName,
+    this.flagEmoji,
+    this.createdAt,
+  });
+
+  final String? visitId;
+  final String? restaurantName;
+  final String? countryId;
+  final String? countryName;
+  final String? flagEmoji;
+  final String? createdAt;
+
+  factory CoupleFirstVisit.fromJson(Map<String, dynamic> j) =>
+      CoupleFirstVisit(
+        visitId: j['visit_id'] as String?,
+        restaurantName: j['restaurant_name'] as String?,
+        countryId: j['country_id'] as String?,
+        countryName: j['country_name'] as String?,
+        flagEmoji: j['flag_emoji'] as String?,
+        createdAt: j['created_at'] as String?,
+      );
+}
+
 class CoupleStats {
   const CoupleStats({
     required this.active,
     required this.jointVisits,
     required this.jointCountries,
     required this.jointCuisines,
+    required this.daysTogether,
+    required this.firstVisit,
     required this.since,
     required this.partner,
   });
@@ -106,6 +136,15 @@ class CoupleStats {
   final int jointVisits;
   final int jointCountries;
   final int jointCuisines;
+
+  /// Whole days elapsed since `accepted_at`. Always >= 0.
+  final int daysTogether;
+
+  /// The oldest joint visit (with_partner=true) on either partner's account,
+  /// rendered as a "First plate together" memory card on MyCoupleScreen.
+  /// Null until the couple actually logs their first joint visit.
+  final CoupleFirstVisit? firstVisit;
+
   final String? since;
   final CouplePartner? partner;
 
@@ -114,9 +153,53 @@ class CoupleStats {
         jointVisits: (j['joint_visits'] as num?)?.toInt() ?? 0,
         jointCountries: (j['joint_countries'] as num?)?.toInt() ?? 0,
         jointCuisines: (j['joint_cuisines'] as num?)?.toInt() ?? 0,
+        daysTogether: (j['days_together'] as num?)?.toInt() ?? 0,
+        firstVisit: j['first_visit'] is Map<String, dynamic>
+            ? CoupleFirstVisit.fromJson(j['first_visit'] as Map<String, dynamic>)
+            : null,
         since: j['since'] as String?,
         partner: j['partner'] is Map<String, dynamic>
             ? CouplePartner.fromJson(j['partner'] as Map<String, dynamic>)
             : null,
       );
+}
+
+/// Result of `/couples/date-night` — a single random country pick for the
+/// couple's next joint meal, drawn from their combined wishlists (preferred)
+/// or anywhere they haven't tasted together yet (fallback).
+class DateNightPick {
+  const DateNightPick({
+    required this.countryId,
+    required this.countryName,
+    this.flagEmoji,
+    this.cuisine,
+    required this.source,
+  });
+
+  final String countryId;
+  final String countryName;
+  final String? flagEmoji;
+  final String? cuisine;
+
+  /// 'wishlist' = drawn from either partner's wishlist.
+  /// 'anywhere' = nothing wishlisted, picked from all-untasted-jointly.
+  final String source;
+
+  bool get fromWishlist => source == 'wishlist';
+
+  static DateNightPick? fromResponse(Map<String, dynamic>? j) {
+    if (j == null) return null;
+    final s = j['suggestion'];
+    if (s is! Map<String, dynamic>) return null;
+    final id = s['country_id'] as String?;
+    final name = s['country_name'] as String?;
+    if (id == null || name == null) return null;
+    return DateNightPick(
+      countryId: id,
+      countryName: name,
+      flagEmoji: s['flag_emoji'] as String?,
+      cuisine: s['cuisine'] as String?,
+      source: (s['source'] as String?) ?? 'anywhere',
+    );
+  }
 }

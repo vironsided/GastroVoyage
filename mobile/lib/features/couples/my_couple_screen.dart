@@ -434,6 +434,10 @@ class _AcceptedView extends ConsumerWidget {
   final bool busy;
   final VoidCallback onUnlink;
 
+  /// Annual stretch goal — try N distinct cuisines together this calendar
+  /// year. Lives only on the client; we don't persist it server-side.
+  static const int _annualCuisineGoal = 12;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(coupleStatsProvider);
@@ -479,6 +483,17 @@ class _AcceptedView extends ConsumerWidget {
                   color: config.onSurfaceVariant,
                 ),
               ),
+              // "X days strong" pill — appears as soon as stats resolve.
+              stats.maybeWhen(
+                data: (s) => s.daysTogether > 0
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: GS.s10),
+                        child: _DaysTogetherPill(
+                            days: s.daysTogether, config: config),
+                      )
+                    : const SizedBox.shrink(),
+                orElse: () => const SizedBox.shrink(),
+              ),
               const SizedBox(height: GS.s20),
               stats.when(
                 loading: () => const SizedBox(
@@ -509,6 +524,36 @@ class _AcceptedView extends ConsumerWidget {
             ],
           ),
         ),
+
+        // ── First plate memory (only when there's a logged joint visit) ──────
+        stats.maybeWhen(
+          data: (s) => (s.firstVisit != null)
+              ? Padding(
+                  padding: const EdgeInsets.only(top: GS.s16),
+                  child: _FirstPlateCard(
+                      firstVisit: s.firstVisit!, config: config),
+                )
+              : const SizedBox.shrink(),
+          orElse: () => const SizedBox.shrink(),
+        ),
+
+        // ── Date Night picker — surfaces a country to chase next ─────────────
+        const SizedBox(height: GS.s16),
+        _DateNightCard(config: config),
+
+        // ── Annual goal — % progress toward 12 cuisines this year ────────────
+        stats.maybeWhen(
+          data: (s) => Padding(
+            padding: const EdgeInsets.only(top: GS.s16),
+            child: _AnnualGoalCard(
+              jointCuisines: s.jointCuisines,
+              goal: _annualCuisineGoal,
+              config: config,
+            ),
+          ),
+          orElse: () => const SizedBox.shrink(),
+        ),
+
         const SizedBox(height: GS.s24),
         Text(
           'WHAT BEING A COUPLE UNLOCKS',
@@ -913,6 +958,443 @@ class _InvitePickerSheetState extends ConsumerState<_InvitePickerSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Days together pill — small badge under the partner card ─────────────────
+
+class _DaysTogetherPill extends StatelessWidget {
+  const _DaysTogetherPill({required this.days, required this.config});
+
+  final int days;
+  final GastroThemeConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = days == 1 ? '1 day strong' : '$days days strong';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: GS.s10, vertical: GS.s4),
+      decoration: BoxDecoration(
+        color: config.surface,
+        borderRadius: BorderRadius.circular(GS.r12),
+        border: Border.all(color: config.accent.withOpacity(0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.heart, size: 12, color: config.accent),
+          const SizedBox(width: GS.s6),
+          Text(
+            label,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 10,
+              letterSpacing: 1.3,
+              fontWeight: FontWeight.w700,
+              color: config.accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── First Plate memory — pinned card of the couple's oldest joint visit ────
+
+class _FirstPlateCard extends StatelessWidget {
+  const _FirstPlateCard({
+    required this.firstVisit,
+    required this.config,
+  });
+
+  final CoupleFirstVisit firstVisit;
+  final GastroThemeConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    final restaurant = firstVisit.restaurantName?.trim();
+    final country = firstVisit.countryName?.trim();
+    final flag = firstVisit.flagEmoji?.trim();
+    final dateLabel = _formatPlateDate(firstVisit.createdAt);
+
+    // Title prefers the country (the cuisine signal); restaurant becomes the
+    // subtitle. When a country is missing we fall back to the restaurant; when
+    // both are missing we just say "A bite together".
+    final title = (country != null && country.isNotEmpty)
+        ? country
+        : ((restaurant != null && restaurant.isNotEmpty)
+            ? restaurant
+            : 'A bite together');
+    final subtitle = (country != null &&
+            country.isNotEmpty &&
+            restaurant != null &&
+            restaurant.isNotEmpty)
+        ? restaurant
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(GS.s16, GS.s14, GS.s16, GS.s16),
+      decoration: BoxDecoration(
+        color: config.surface,
+        borderRadius: BorderRadius.circular(GS.r20),
+        border: Border.all(color: config.outlineVariant.withOpacity(0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.bookmark, size: 14, color: config.accent),
+              const SizedBox(width: GS.s6),
+              Text(
+                'OUR FIRST PLATE',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 10,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w700,
+                  color: config.accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: GS.s8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (flag != null && flag.isNotEmpty) ...[
+                Text(flag, style: const TextStyle(fontSize: 32)),
+                const SizedBox(width: GS.s10),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.playfairDisplay(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: config.onSurface,
+                        height: 1.15,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'at $subtitle',
+                        style: GoogleFonts.hankenGrotesk(
+                          fontSize: 13,
+                          color: config.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    if (dateLabel != null) ...[
+                      const SizedBox(height: GS.s6),
+                      Text(
+                        dateLabel,
+                        style: GoogleFonts.caveat(
+                          fontSize: 17,
+                          color: config.accent,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String? _formatPlateDate(String? raw) {
+    if (raw == null) return null;
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      return 'where it all began · ${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+// ─── Date Night picker — random next country to chase together ──────────────
+
+class _DateNightCard extends ConsumerStatefulWidget {
+  const _DateNightCard({required this.config});
+  final GastroThemeConfig config;
+
+  @override
+  ConsumerState<_DateNightCard> createState() => _DateNightCardState();
+}
+
+class _DateNightCardState extends ConsumerState<_DateNightCard> {
+  DateNightPick? _pick;
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _surprise() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final pick = await ref.read(apiClientProvider).coupleDateNight();
+      setState(() {
+        _pick = pick;
+        if (pick == null) {
+          _error = "You've tasted everything together — bold move.";
+        }
+      });
+    } catch (_) {
+      setState(() => _error = 'Could not pick a country. Try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final config = widget.config;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(GS.s16, GS.s14, GS.s16, GS.s16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            config.accent.withOpacity(0.10),
+            config.surface,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(GS.r20),
+        border: Border.all(color: config.accent.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.zap, size: 14, color: config.accent),
+              const SizedBox(width: GS.s6),
+              Text(
+                'DATE NIGHT',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 10,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w700,
+                  color: config.accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: GS.s8),
+          if (_pick == null && _error == null)
+            Text(
+              "Can't decide what to cook? Let us pick one country for your next "
+              "shared bite — pulled from your wishlists, never one you've already "
+              "had together.",
+              style: GoogleFonts.hankenGrotesk(
+                fontSize: 13,
+                height: 1.45,
+                color: config.onSurfaceVariant,
+              ),
+            )
+          else if (_pick != null)
+            _PickPreview(pick: _pick!, config: config)
+          else
+            Text(
+              _error!,
+              style: GoogleFonts.caveat(
+                fontSize: 17,
+                color: config.onSurfaceVariant,
+              ),
+            ),
+          const SizedBox(height: GS.s12),
+          FilledButton.icon(
+            onPressed: _busy ? null : _surprise,
+            icon: _busy
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(LucideIcons.sparkles, size: 16),
+            label: Text(_pick == null ? 'Surprise us' : 'Try another'),
+            style: FilledButton.styleFrom(
+              backgroundColor: config.accent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: GS.s12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(GS.r12),
+              ),
+              textStyle: GoogleFonts.hankenGrotesk(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PickPreview extends StatelessWidget {
+  const _PickPreview({required this.pick, required this.config});
+  final DateNightPick pick;
+  final GastroThemeConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    final flag = pick.flagEmoji?.trim();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (flag != null && flag.isNotEmpty) ...[
+          Text(flag, style: const TextStyle(fontSize: 36)),
+          const SizedBox(width: GS.s10),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                pick.countryName,
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: config.onSurface,
+                  height: 1.1,
+                ),
+              ),
+              if (pick.cuisine != null && pick.cuisine!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  pick.cuisine!,
+                  style: GoogleFonts.hankenGrotesk(
+                    fontSize: 13,
+                    color: config.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: GS.s4),
+              Text(
+                pick.fromWishlist
+                    ? 'pulled from your shared wishlist'
+                    : 'a new flag to chase together',
+                style: GoogleFonts.caveat(
+                  fontSize: 16,
+                  color: config.accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Annual goal — N cuisines this year together ────────────────────────────
+
+class _AnnualGoalCard extends StatelessWidget {
+  const _AnnualGoalCard({
+    required this.jointCuisines,
+    required this.goal,
+    required this.config,
+  });
+
+  final int jointCuisines;
+  final int goal;
+  final GastroThemeConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = (goal == 0) ? 0.0 : (jointCuisines / goal).clamp(0.0, 1.0);
+    final done = jointCuisines >= goal;
+    final year = DateTime.now().year;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(GS.s16, GS.s14, GS.s16, GS.s16),
+      decoration: BoxDecoration(
+        color: config.surface,
+        borderRadius: BorderRadius.circular(GS.r20),
+        border: Border.all(color: config.outlineVariant.withOpacity(0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.flag, size: 14, color: config.accent),
+              const SizedBox(width: GS.s6),
+              Text(
+                'COUPLE GOAL · $year',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 10,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w700,
+                  color: config.accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: GS.s8),
+          Text(
+            done
+                ? '$goal cuisines together — done. Set a wilder bar next year.'
+                : 'Try $goal distinct cuisines together this year.',
+            style: GoogleFonts.playfairDisplay(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: config.onSurface,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: GS.s10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(GS.r8),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: config.accent.withOpacity(0.15),
+              valueColor: AlwaysStoppedAnimation<Color>(config.accent),
+            ),
+          ),
+          const SizedBox(height: GS.s6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '$jointCuisines / $goal cuisines',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 11,
+                  letterSpacing: 1.2,
+                  color: config.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                done ? '🎉 goal hit' : '${(progress * 100).round()}%',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 11,
+                  letterSpacing: 1.2,
+                  color: config.accent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

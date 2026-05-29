@@ -11,6 +11,9 @@ degrade gracefully — a not-yet-migrated DB returns `completed_weeks: 0` rather
 than 500-ing.
 """
 
+import random
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -324,6 +327,12 @@ async def couple_stats(user_id: str = Depends(current_user_id)):
     on either side), distinct countries tasted together, distinct cuisines.
     Returns zeroes when there's no active couple or the migrations aren't
     applied. Cheap enough to call from the dashboard on every refresh.
+
+    Also returns:
+      • `days_together`  — whole days elapsed since the couple was accepted
+                            (always 0 when there's no accepted_at)
+      • `first_visit`    — the oldest joint visit's dish_name + country, used
+                            by MyCoupleScreen to render a "First plate" memory
     """
     sb = get_supabase()
     couple = _fetch_active_couple(sb, user_id)
@@ -333,6 +342,8 @@ async def couple_stats(user_id: str = Depends(current_user_id)):
             "joint_visits": 0,
             "joint_countries": 0,
             "joint_cuisines": 0,
+            "days_together": 0,
+            "first_visit": None,
             "since": None,
             "partner": None,
         }
@@ -346,12 +357,17 @@ async def couple_stats(user_id: str = Depends(current_user_id)):
     joint_visits = 0
     countries: set[str] = set()
     cuisines: set[str] = set()
+    first_visit: dict | None = None
     try:
         res = (
             sb.table("visits")
-            .select("country_id, countries(region, subregion)")
+            .select(
+                "id, restaurant_name, country_id, visited_on, created_at, "
+                "countries(id, name, flag_emoji, region, subregion)"
+            )
             .in_("user_id", [user_id, partner_id])
             .eq("with_partner", True)
+            .order("visited_on", desc=False)
             .execute()
         )
         rows = res.data or []
@@ -363,9 +379,38 @@ async def couple_stats(user_id: str = Depends(current_user_id)):
             sub = c.get("subregion") or c.get("region")
             if sub:
                 cuisines.add(sub)
+        if rows:
+            r0 = rows[0]
+            c0 = r0.get("countries") or {}
+            first_visit = {
+                "visit_id": r0.get("id"),
+                "restaurant_name": r0.get("restaurant_name"),
+                "country_id": r0.get("country_id"),
+                "country_name": c0.get("name"),
+                "flag_emoji": c0.get("flag_emoji"),
+                # Prefer the user-supplied visited_on (the plate's real date),
+                # falling back to created_at when older rows lack it.
+                "created_at": r0.get("visited_on") or r0.get("created_at"),
+            }
     except Exception:
         # Migration 015 not applied yet — leave counts at zero.
         pass
+
+    days_together = 0
+    accepted_at_raw = couple.get("accepted_at")
+    if accepted_at_raw:
+        try:
+            # Postgres timestamptz arrives as ISO-8601 with trailing offset.
+            ts = accepted_at_raw
+            if isinstance(ts, str) and ts.endswith("Z"):
+                ts = ts[:-1] + "+00:00"
+            accepted_dt = datetime.fromisoformat(str(ts))
+            if accepted_dt.tzinfo is None:
+                accepted_dt = accepted_dt.replace(tzinfo=timezone.utc)
+            delta = datetime.now(timezone.utc) - accepted_dt
+            days_together = max(0, delta.days)
+        except Exception:
+            days_together = 0
 
     hydrated = _hydrate_partner(sb, dict(couple), user_id)
 
@@ -374,6 +419,110 @@ async def couple_stats(user_id: str = Depends(current_user_id)):
         "joint_visits": joint_visits,
         "joint_countries": len(countries),
         "joint_cuisines": len(cuisines),
+        "days_together": days_together,
+        "first_visit": first_visit,
         "since": couple.get("accepted_at") or couple.get("created_at"),
         "partner": hydrated.get("partner"),
+    }
+
+
+# ─── Date Night picker ───────────────────────────────────────────────────────
+
+@router.get("/date-night")
+async def date_night(user_id: str = Depends(current_user_id)):
+    """Suggest one random country for the couple's next date-night meal.
+
+    Picks from the union of both partners' wishlists, excluding countries
+    they've already eaten together. Falls back to a random unvisited (jointly)
+    country when neither partner has anything wishlisted.
+
+    Always returns `{ "suggestion": {country_id, country_name, flag_emoji,
+    cuisine, reason} | None }`. Returns `None` only when there's no active
+    couple, or the database has zero countries.
+    """
+    sb = get_supabase()
+    couple = _fetch_active_couple(sb, user_id)
+    if not couple or couple["status"] != "accepted":
+        return {"suggestion": None, "reason": "no_active_couple"}
+
+    partner_id = (
+        couple["partner_b_id"]
+        if couple["partner_a_id"] == user_id
+        else couple["partner_a_id"]
+    )
+
+    # Countries already tasted jointly — we never resuggest these.
+    already_joint: set[str] = set()
+    try:
+        jres = (
+            sb.table("visits")
+            .select("country_id")
+            .in_("user_id", [user_id, partner_id])
+            .eq("with_partner", True)
+            .execute()
+        )
+        for r in jres.data or []:
+            cid = r.get("country_id")
+            if cid:
+                already_joint.add(cid)
+    except Exception:
+        pass
+
+    # Union of both partners' wishlists.
+    wished: set[str] = set()
+    try:
+        wres = (
+            sb.table("wishlist")
+            .select("country_id")
+            .in_("user_id", [user_id, partner_id])
+            .execute()
+        )
+        for r in wres.data or []:
+            cid = r.get("country_id")
+            if cid:
+                wished.add(cid)
+    except Exception:
+        pass
+
+    candidates = wished - already_joint
+    source = "wishlist"
+
+    # Fall back to "anything you haven't done together yet".
+    if not candidates:
+        try:
+            cres = sb.table("countries").select("id").execute()
+            all_ids = {r["id"] for r in (cres.data or []) if r.get("id")}
+            candidates = all_ids - already_joint
+            source = "anywhere"
+        except Exception:
+            candidates = set()
+
+    if not candidates:
+        return {"suggestion": None, "reason": "exhausted"}
+
+    pick_id = random.choice(list(candidates))
+    try:
+        cdetail = (
+            sb.table("countries")
+            .select("id, name, flag_emoji, region, subregion")
+            .eq("id", pick_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception:
+        cdetail = None
+
+    if not (cdetail and cdetail.data):
+        return {"suggestion": None, "reason": "lookup_failed"}
+
+    c = cdetail.data
+    return {
+        "suggestion": {
+            "country_id": c["id"],
+            "country_name": c.get("name"),
+            "flag_emoji": c.get("flag_emoji"),
+            "cuisine": c.get("subregion") or c.get("region"),
+            "source": source,
+        },
+        "reason": "ok",
     }

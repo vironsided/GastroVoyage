@@ -718,6 +718,16 @@ class ApiClient {
         (res.data as Map<String, dynamic>?) ?? const {});
   }
 
+  /// Random "date night" country suggestion drawn from the union of both
+  /// partners' wishlists (preferred) or from anywhere they haven't tasted
+  /// together yet. Returns null when there's no active couple or the country
+  /// pool is exhausted. Each call returns a fresh random pick.
+  Future<DateNightPick?> coupleDateNight() async {
+    final res = await _dio.get('/couples/date-night');
+    return DateNightPick.fromResponse(
+        (res.data as Map<String, dynamic>?));
+  }
+
   // ── Notifications inbox ─────────────────────────────────────────────────────
 
   /// Lists the current user's notifications, newest first. A not-yet-migrated
