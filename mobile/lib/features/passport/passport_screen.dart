@@ -1,96 +1,80 @@
-import 'dart:math' as math;
-
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import 'package:mobile/app/gastro_theme_config.dart';
 import 'package:mobile/app/gs_design.dart';
 import 'package:mobile/app/providers.dart';
-import 'package:mobile/core/network/api_client.dart';
 import 'package:mobile/features/explore/country_dishes.dart';
 import 'package:mobile/features/passport/export/passport_export_service.dart';
-import 'package:mobile/features/passport/pages/identity_page.dart';
-import 'package:mobile/features/passport/passport_dimensions.dart';
-import 'package:mobile/features/passport/passport_spread_view.dart';
+import 'package:mobile/features/passport/pages/identity_page.dart' show buildIdentityCardData, IdentityCardData;
 import 'package:mobile/features/shared/models.dart';
-import 'package:mobile/features/social/data/social_providers.dart';
-import 'package:mobile/features/social/widgets/share_to_feed_sheet.dart';
-import 'package:mobile/app/gastro_theme_config.dart';
-import 'package:mobile/ui/painters/scrapbook_painters.dart';
 
-/// Shared warm gold/parchment palette for the passport chrome.
-const _kGold = Color(0xFFD4A843);
-const _kParchment = Color(0xFFEBD9B5);
-
-/// Full-screen gastro passport: horizontal open-book spread (9×13.5 per page).
+/// Full-screen culinary passport — modern, clean redesign.
+///
+/// Replaces the old skeuomorphic leather flip-book (which rendered the cover at
+/// the open-spread landscape ratio, leaving big voids and overlapping text).
+/// Now it's an on-brand experience using the app theme:
+///
+///   • a portrait COVER hero (identity + stats + recent flags), then
+///   • tap "Open" → a horizontal PageView of clean per-visit pages.
+///
+/// PDF export is unchanged (delegates to [PassportExportService]).
 class PassportScreen extends ConsumerStatefulWidget {
   const PassportScreen({
     super.key,
     required this.visits,
     this.initialVisitIndex = 0,
+    this.openImmediately = false,
   });
 
   final List<Visit> visits;
   final int initialVisitIndex;
 
+  /// When true (a per-visit tap from the Passport tab), skip the cover and
+  /// open straight to [initialVisitIndex]. The general "View passport" entry
+  /// leaves this false so it still opens on the cover.
+  final bool openImmediately;
+
   @override
   ConsumerState<PassportScreen> createState() => _PassportScreenState();
 }
 
-class _PassportScreenState extends ConsumerState<PassportScreen>
-    with SingleTickerProviderStateMixin {
-  final _spreadKey = GlobalKey<PassportSpreadViewState>();
-  late final AnimationController _openAnim;
-
-  bool _showCover = true;
-  late int _spreadIndex;
-
-  /// Spread 0 is always the identity spread; visits start at index 1. Keeping
-  /// this offset in one place avoids off-by-ones when translating between
-  /// "visit index" (caller-facing) and "spread index" (book-internal).
-  static const int _identitySpreadOffset = 1;
+class _PassportScreenState extends ConsumerState<PassportScreen> {
+  late final PageController _pageController;
+  bool _opened = false;
+  int _page = 0;
 
   @override
   void initState() {
     super.initState();
-    // Open onto the identity page by default; if the caller passes a visit
-    // index, jump to that visit's spread (offset by 1 for the identity page).
-    final int visitIdx = widget.initialVisitIndex
-        .clamp(0, math.max(0, widget.visits.length - 1))
-        .toInt();
-    _spreadIndex = widget.visits.isEmpty
+    final initial = widget.visits.isEmpty
         ? 0
-        : visitIdx + _identitySpreadOffset;
-    _openAnim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        : widget.initialVisitIndex.clamp(0, widget.visits.length - 1);
+    _page = initial;
+    _pageController = PageController(initialPage: initial);
+    // A deliberate per-visit tap opens straight to that stamp; the general
+    // entry (and the empty case) still lands on the cover.
+    _opened = widget.openImmediately && widget.visits.isNotEmpty;
   }
 
   @override
   void dispose() {
-    _openAnim.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _pageController.dispose();
     super.dispose();
   }
 
-  /// Resolves the data needed for the identity spread from the providers.
-  /// Returns null when the user is signed-out so the spread is skipped — the
-  /// passport screen is normally gated behind `auth.isLoggedIn`, but we keep
-  /// this defensive in case a test harness mounts it cold.
-  IdentityCardData? _identityCardData() {
+  IdentityCardData _identity() {
     final auth = ref.watch(authProvider);
-    if (auth.userId == null) return null;
-    final profileAsync = ref.watch(profileProvider);
-    final avatarUrl = profileAsync.maybeWhen(
-      data: (p) => p.avatarUrl,
-      orElse: () => null,
-    );
+    final avatarUrl = ref.watch(profileProvider).maybeWhen(
+          data: (p) => p.avatarUrl,
+          orElse: () => null,
+        );
     return buildIdentityCardData(
       userId: auth.userId,
       displayName: auth.displayName,
@@ -100,51 +84,7 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
     );
   }
 
-  /// Visit spreads built from the user's logged visits. Used for both
-  /// the visible book and the cover stats.
-  List<VisitSpread> _visitSpreads() => widget.visits.map((v) {
-        final iso = v.country?.isoA2 ?? '';
-        final region = v.country?.region ?? '';
-        final dish = dishFor(isoA2: iso, region: region);
-        return VisitSpread(
-          visit: v,
-          stampPhotoUrl: v.photoPath,
-          dishPhotoUrl: dish.imageUrl,
-          dishName: dish.dish,
-        );
-      }).toList();
-
-  /// Identity spread (when available) + every visit spread, in order.
-  List<BookSpread> _spreads() {
-    final identity = _identityCardData();
-    final visits = _visitSpreads();
-    return [
-      if (identity != null) IdentitySpread(data: identity),
-      ...visits,
-    ];
-  }
-
-  /// Total spreads currently in the book (identity + visits).
-  int get _totalSpreads {
-    final id = ref.read(authProvider).userId == null ? 0 : 1;
-    return id + widget.visits.length;
-  }
-
-  /// True iff [_spreadIndex] is on a visit spread (i.e. past the identity).
-  bool get _isOnVisitSpread =>
-      widget.visits.isNotEmpty && _spreadIndex >= _identitySpreadOffset;
-
-  Future<void> _openPassport() async {
-    if (!_showCover) return;
-    await _openAnim.forward();
-    setState(() => _showCover = false);
-  }
-
-  /// Builds the user's culinary passport as a multi-page PDF and hands it to
-  /// the native share sheet (WhatsApp / Mail / Drive / Print). Always
-  /// available from the top bar — works on both the cover and open-book
-  /// views, so the user can grab the artefact at any time.
-  Future<void> _exportPassport() async {
+  Future<void> _export() async {
     HapticFeedback.selectionClick();
     await PassportExportService.exportAndShare(
       context,
@@ -153,86 +93,61 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
     );
   }
 
-  /// The visit currently shown in the open spread, if any. Returns null on
-  /// the identity spread (spread 0) or when there are no visits at all.
-  Visit? get _currentVisit {
-    if (widget.visits.isEmpty || !_isOnVisitSpread) return null;
-    final visitIdx = (_spreadIndex - _identitySpreadOffset)
-        .clamp(0, widget.visits.length - 1);
-    return widget.visits[visitIdx];
-  }
-
-  /// Publishes the current spread's visit photo to the social stories feed.
-  /// Only reachable when the visit actually has a photo (the Share button is
-  /// hidden otherwise).
-  Future<void> _shareToFeed() async {
-    final visit = _currentVisit;
-    final photoUrl = visit?.photoPath;
-    if (visit == null || photoUrl == null || photoUrl.isEmpty) return;
-
+  void _open() {
+    if (_opened) return;
     HapticFeedback.selectionClick();
-    final config = ref.read(gastroThemeConfigProvider);
-    final countryName = visit.country?.name;
-
-    final caption = await ShareToFeedSheet.show(
-      context,
-      config: config,
-      photoUrl: photoUrl,
-      countryName: countryName,
-    );
-    // `null` ⇒ the user dismissed the sheet without posting.
-    if (caption == null || !mounted) return;
-
-    try {
-      await ref.read(apiClientProvider).createStory(
-            photoUrl: photoUrl,
-            caption: caption.isEmpty ? null : caption,
-            countryId: visit.countryId.isEmpty ? null : visit.countryId,
-          );
-      if (!mounted) return;
-      // Refresh the feed so the new story appears immediately.
-      invalidateSocialFromWidget(ref);
-      _showShareSnack(config, posted: true);
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e is UnauthorizedException
-          ? 'Your session expired. Please sign in again.'
-          : 'Could not share to the feed. Please try again.';
-      _showShareSnack(config, posted: false, message: msg);
-    }
+    setState(() => _opened = true);
   }
 
-  void _showShareSnack(
-    GastroThemeConfig config, {
-    required bool posted,
-    String? message,
-  }) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: posted ? config.accent : config.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(GS.r12),
-        ),
-        content: Row(
+  @override
+  Widget build(BuildContext context) {
+    final config = ref.watch(gastroThemeConfigProvider);
+    final identity = _identity();
+    final earnedStamps = ref.watch(badgesProvider).maybeWhen(
+          data: (b) => b.where((x) => x.earned).length,
+          orElse: () => 0,
+        );
+
+    return Scaffold(
+      backgroundColor: config.background,
+      body: SafeArea(
+        child: Column(
           children: [
-            Icon(
-              posted
-                  ? Icons.check_circle_rounded
-                  : Icons.error_outline_rounded,
-              color: Colors.white,
-              size: 18,
+            _TopBar(
+              config: config,
+              opened: _opened,
+              onLeading: () {
+                if (_opened) {
+                  setState(() => _opened = false);
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
+              onExport: _export,
             ),
-            const SizedBox(width: GS.s10),
             Expanded(
-              child: Text(
-                message ??
-                    'Shared to your stories feed — bon appétit!',
-                style: GoogleFonts.hankenGrotesk(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
+              child: AnimatedSwitcher(
+                duration: GS.normal,
+                switchInCurve: GS.smooth,
+                switchOutCurve: GS.smooth,
+                child: _opened
+                    ? _PagesView(
+                        key: const ValueKey('pages'),
+                        visits: widget.visits,
+                        controller: _pageController,
+                        config: config,
+                        page: _page,
+                        onPageChanged: (i) => setState(() => _page = i),
+                      )
+                    : _CoverView(
+                        key: const ValueKey('cover'),
+                        config: config,
+                        identity: identity,
+                        visits: widget.visits,
+                        earnedStamps: earnedStamps,
+                        onOpen: _open,
+                        onExport: _export,
+                      ),
               ),
             ),
           ],
@@ -240,180 +155,51 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
       ),
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final spreads = _spreads();
-    final total = _totalSpreads;
-    final auth = ref.watch(authProvider);
-    // The profile provider is watched inside `_identityCardData()` so the
-    // identity spread rebuilds when the avatar resolves.
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A100A),
-      body: Stack(
-        children: [
-          Positioned.fill(child: _WoodBackdrop()),
-          SafeArea(
-            child: Column(
-              children: [
-                _TopBar(
-                  spreadIndex: _spreadIndex,
-                  spreadCount: total,
-                  showCover: _showCover,
-                  onClose: () => Navigator.of(context).pop(),
-                  // Share is only offered once the book is open and the
-                  // current spread's visit has a photo to publish.
-                  canShare: !_showCover &&
-                      (_currentVisit?.photoPath?.isNotEmpty ?? false),
-                  onShare: _shareToFeed,
-                  onExport: _exportPassport,
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
-                    child: Center(
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        child: SizedBox(
-                          width: PassportDimensions.spreadLogicalWidth,
-                          height: PassportDimensions.spreadLogicalHeight,
-                          child: _PassportFrame(
-                            child: _showCover
-                                ? _CoverPanel(
-                                    visitCount: widget.visits.length,
-                                    holderName: auth.displayName,
-                                    holderId: auth.userId,
-                                    onOpen: _openPassport,
-                                  )
-                                : PassportSpreadView(
-                                    key: _spreadKey,
-                                    spreads: spreads,
-                                    initialSpreadIndex: _spreadIndex,
-                                    onSpreadChanged: (i) =>
-                                        setState(() => _spreadIndex = i),
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                if (!_showCover)
-                  _SpreadNav(
-                    spreadIndex: _spreadIndex,
-                    spreadCount: total,
-                    onFlipTopDown: () =>
-                        _spreadKey.currentState?.flipTopDown(),
-                    onFlipBottomUp: () =>
-                        _spreadKey.currentState?.flipBottomUp(),
-                  ),
-                const SizedBox(height: 6),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
+// ─── Top bar ──────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   const _TopBar({
-    required this.spreadIndex,
-    required this.spreadCount,
-    required this.showCover,
-    required this.onClose,
-    required this.canShare,
-    required this.onShare,
+    required this.config,
+    required this.opened,
+    required this.onLeading,
     required this.onExport,
   });
 
-  final int spreadIndex;
-  final int spreadCount;
-  final bool showCover;
-  final VoidCallback onClose;
-
-  /// Whether the current spread's visit can be shared to the feed.
-  final bool canShare;
-  final VoidCallback onShare;
-
-  /// Always-on: exports the whole passport as a PDF and opens the native
-  /// share sheet.
+  final GastroThemeConfig config;
+  final bool opened;
+  final VoidCallback onLeading;
   final VoidCallback onExport;
 
   @override
   Widget build(BuildContext context) {
-    // Trailing actions: Export is always present; Share-to-feed appears only
-    // when the current visit has a photo. Page index is conveyed by the
-    // dot strip at the bottom, so we don't repeat it here.
-    final trailing = <Widget>[
-      Tooltip(
-        message: 'Export passport PDF',
-        child: _CircleBtn(icon: LucideIcons.download, onTap: onExport),
-      ),
-      if (canShare) ...[
-        const SizedBox(width: GS.s6),
-        Tooltip(
-          message: 'Share to feed',
-          child: _CircleBtn(icon: Icons.ios_share_rounded, onTap: onShare),
-        ),
-      ],
-    ];
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(GS.s16, GS.s8, GS.s16, GS.s6),
-      child: Column(
+      padding: const EdgeInsets.fromLTRB(GS.s12, GS.s8, GS.s12, GS.s8),
+      child: Row(
         children: [
-          Row(
-            children: [
-              _CircleBtn(icon: Icons.close_rounded, onTap: onClose),
-              const Spacer(),
-              Column(
-                children: [
-                  Text(
-                    'GASTRO VOYAGE',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9,
-                      color: _kParchment.withOpacity(0.7),
-                      letterSpacing: 3.5,
-                    ),
-                  ),
-                  const SizedBox(height: GS.s2),
-                  Text(
-                    'PASSPORT',
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: _kParchment,
-                      letterSpacing: 5,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              // Trailing slot — Export is always rendered, Share follows
-              // when the current visit has a photo to publish.
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: trailing,
-              ),
-            ],
+          _CircleBtn(
+            icon: opened ? Icons.arrow_back_rounded : Icons.close_rounded,
+            config: config,
+            onTap: onLeading,
+            tooltip: opened ? 'Back to cover' : 'Close passport',
           ),
-          const SizedBox(height: GS.s8),
-          // Hairline gold rule — editorial divider under the masthead.
-          Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  _kGold.withOpacity(0.0),
-                  _kGold.withOpacity(0.5),
-                  _kGold.withOpacity(0.0),
-                ],
+          Expanded(
+            child: Text(
+              'Passport',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.playfairDisplay(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: config.onSurface,
               ),
             ),
+          ),
+          _CircleBtn(
+            icon: LucideIcons.download,
+            config: config,
+            onTap: onExport,
+            tooltip: 'Export passport PDF',
           ),
         ],
       ),
@@ -421,50 +207,238 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _SpreadNav extends StatelessWidget {
-  const _SpreadNav({
-    required this.spreadIndex,
-    required this.spreadCount,
-    required this.onFlipTopDown,
-    required this.onFlipBottomUp,
+class _CircleBtn extends StatelessWidget {
+  const _CircleBtn({
+    required this.icon,
+    required this.config,
+    required this.onTap,
+    this.tooltip,
   });
 
-  final int spreadIndex;
-  final int spreadCount;
-  final VoidCallback onFlipTopDown;
-  final VoidCallback onFlipBottomUp;
+  final IconData icon;
+  final GastroThemeConfig config;
+  final VoidCallback onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: GS.s16),
+    final btn = Material(
+      color: config.surfaceVariant,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(icon, size: 20, color: config.onSurface),
+        ),
+      ),
+    );
+    return tooltip == null ? btn : Tooltip(message: tooltip!, child: btn);
+  }
+}
+
+// ─── Cover ──────────────────────────────────────────────────────────────────
+
+class _CoverView extends StatelessWidget {
+  const _CoverView({
+    super.key,
+    required this.config,
+    required this.identity,
+    required this.visits,
+    required this.earnedStamps,
+    required this.onOpen,
+    required this.onExport,
+  });
+
+  final GastroThemeConfig config;
+  final IdentityCardData identity;
+  final List<Visit> visits;
+  final int earnedStamps;
+  final VoidCallback onOpen;
+  final VoidCallback onExport;
+
+  @override
+  Widget build(BuildContext context) {
+    final countries =
+        visits.map((v) => v.countryId).where((id) => id.isNotEmpty).toSet().length;
+
+    // Distinct country flags, in the order visits arrive (newest-first as passed).
+    final flags = <String>[];
+    final seen = <String>{};
+    for (final v in visits) {
+      final f = v.country?.flagEmoji ?? '';
+      final id = v.countryId;
+      if (f.isEmpty || id.isEmpty || seen.contains(id)) continue;
+      seen.add(id);
+      flags.add(f);
+      if (flags.length >= 12) break;
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(GS.s20, GS.s8, GS.s20, GS.s24),
+      physics: const BouncingScrollPhysics(),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'swipe or tap edges to turn pages',
-            style: GoogleFonts.caveat(
-              fontSize: 14,
-              color: _kParchment.withOpacity(0.55),
-              letterSpacing: 0.4,
+          const SizedBox(height: GS.s12),
+
+          // Identity card.
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(GS.s24),
+            decoration: BoxDecoration(
+              color: config.surface,
+              borderRadius: BorderRadius.circular(GS.r24),
+              border: Border.all(color: config.accent.withOpacity(0.25)),
+              boxShadow: GS.shadow(
+                color: config.accent,
+                blur: 28,
+                yOffset: 12,
+                opacity: config.isDark ? 0.16 : 0.10,
+              ),
+            ),
+            child: Column(
+              children: [
+                _Avatar(config: config, identity: identity),
+                const SizedBox(height: GS.s16),
+                Text(
+                  identity.displayName,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                    color: config.onSurface,
+                    height: 1.1,
+                  ),
+                ),
+                if (identity.homeCity != null &&
+                    identity.homeCity!.trim().isNotEmpty) ...[
+                  const SizedBox(height: GS.s4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.place_rounded,
+                          size: 13, color: config.onSurfaceVariant),
+                      const SizedBox(width: GS.s4),
+                      Text(
+                        identity.homeCity!,
+                        style: GoogleFonts.hankenGrotesk(
+                          fontSize: 13,
+                          color: config.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: GS.s6),
+                Text(
+                  'GASTRO ID · ${identity.gastroId}',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 10,
+                    letterSpacing: 1.5,
+                    color: config.accent,
+                  ),
+                ),
+
+                const SizedBox(height: GS.s20),
+                Divider(color: config.onSurface.withOpacity(0.08), height: 1),
+                const SizedBox(height: GS.s20),
+
+                // Stats.
+                Row(
+                  children: [
+                    _Stat(
+                        value: '$countries',
+                        label: countries == 1 ? 'country' : 'countries',
+                        config: config),
+                    _StatDivider(config: config),
+                    _Stat(
+                        value: '${visits.length}',
+                        label: visits.length == 1 ? 'visit' : 'visits',
+                        config: config),
+                    _StatDivider(config: config),
+                    _Stat(
+                        value: '$earnedStamps',
+                        label: earnedStamps == 1 ? 'stamp' : 'stamps',
+                        config: config),
+                  ],
+                ),
+
+                if (flags.isNotEmpty) ...[
+                  const SizedBox(height: GS.s20),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'RECENTLY TASTED',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 9,
+                        letterSpacing: 2,
+                        color: config.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: GS.s8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: GS.s8,
+                      runSpacing: GS.s8,
+                      children: [
+                        for (final f in flags)
+                          Text(f, style: const TextStyle(fontSize: 24)),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          )
+              .animate()
+              .fadeIn(duration: GS.normal, curve: GS.smooth)
+              .slideY(begin: 0.04, end: 0, duration: GS.normal, curve: GS.smooth),
+
+          const SizedBox(height: GS.s24),
+
+          // Primary + secondary actions.
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(LucideIcons.bookOpen, size: 18),
+              label: Text(
+                visits.isEmpty ? 'Open passport' : 'Open the book',
+                style: GoogleFonts.hankenGrotesk(
+                    fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: config.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(GS.r16)),
+              ),
             ),
           ),
-          const SizedBox(height: GS.s8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _CircleBtn(
-                icon: Icons.keyboard_arrow_left_rounded,
-                onTap: onFlipBottomUp,
+          const SizedBox(height: GS.s12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onExport,
+              icon: const Icon(LucideIcons.download, size: 18),
+              label: Text(
+                'Export PDF',
+                style: GoogleFonts.hankenGrotesk(
+                    fontWeight: FontWeight.w600, fontSize: 14),
               ),
-              const SizedBox(width: GS.s20),
-              _PageDots(index: spreadIndex, count: spreadCount),
-              const SizedBox(width: GS.s20),
-              _CircleBtn(
-                icon: Icons.keyboard_arrow_right_rounded,
-                onTap: onFlipTopDown,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: config.onSurface,
+                side: BorderSide(color: config.onSurface.withOpacity(0.18)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(GS.r16)),
               ),
-            ],
+            ),
           ),
         ],
       ),
@@ -472,37 +446,208 @@ class _SpreadNav extends StatelessWidget {
   }
 }
 
-/// Compact dotted progress strip for the passport spreads. Collapses to a
-/// numeric tally when there are too many spreads to show individual dots.
-class _PageDots extends StatelessWidget {
-  const _PageDots({required this.index, required this.count});
-  final int index;
-  final int count;
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.config, required this.identity});
+  final GastroThemeConfig config;
+  final IdentityCardData identity;
+
+  String get _initials {
+    final parts = identity.displayName.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '🍽';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (count > 9) {
+    final placeholder = Container(
+      color: config.accent.withOpacity(0.15),
+      alignment: Alignment.center,
+      child: Text(
+        _initials,
+        style: GoogleFonts.playfairDisplay(
+          fontSize: 28,
+          fontWeight: FontWeight.w700,
+          color: config.accent,
+        ),
+      ),
+    );
+
+    final url = identity.avatarUrl;
+    return Container(
+      width: 84,
+      height: 84,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: config.accent.withOpacity(0.5), width: 2),
+      ),
+      child: ClipOval(
+        child: (url == null || url.isEmpty)
+            ? placeholder
+            : CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => placeholder,
+                errorWidget: (_, __, ___) => placeholder,
+              ),
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.value, required this.label, required this.config});
+  final String value;
+  final String label;
+  final GastroThemeConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: GoogleFonts.playfairDisplay(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: config.onSurface,
+            ),
+          ),
+          const SizedBox(height: GS.s2),
+          Text(
+            label.toUpperCase(),
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 8.5,
+              letterSpacing: 1.2,
+              color: config.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatDivider extends StatelessWidget {
+  const _StatDivider({required this.config});
+  final GastroThemeConfig config;
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 34,
+        color: config.onSurface.withOpacity(0.08),
+      );
+}
+
+// ─── Pages ──────────────────────────────────────────────────────────────────
+
+class _PagesView extends StatelessWidget {
+  const _PagesView({
+    super.key,
+    required this.visits,
+    required this.controller,
+    required this.config,
+    required this.page,
+    required this.onPageChanged,
+  });
+
+  final List<Visit> visits;
+  final PageController controller;
+  final GastroThemeConfig config;
+  final int page;
+  final ValueChanged<int> onPageChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (visits.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(GS.s32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(LucideIcons.compass,
+                  size: 40, color: config.onSurfaceVariant),
+              const SizedBox(height: GS.s16),
+              Text(
+                'No stamps yet',
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: config.onSurface,
+                ),
+              ),
+              const SizedBox(height: GS.s8),
+              Text(
+                'Log your first tasting and it will appear here as a passport stamp.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.hankenGrotesk(
+                  fontSize: 13,
+                  color: config.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: PageView.builder(
+            controller: controller,
+            onPageChanged: onPageChanged,
+            itemCount: visits.length,
+            itemBuilder: (_, i) =>
+                _VisitPage(visit: visits[i], config: config),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(GS.s16, GS.s8, GS.s16, GS.s12),
+          child: _PageIndicator(
+              index: page, count: visits.length, config: config),
+        ),
+      ],
+    );
+  }
+}
+
+class _PageIndicator extends StatelessWidget {
+  const _PageIndicator(
+      {required this.index, required this.count, required this.config});
+  final int index;
+  final int count;
+  final GastroThemeConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    if (count > 12) {
       return Text(
         '${index + 1}  ·  $count',
         style: GoogleFonts.jetBrainsMono(
           fontSize: 11,
-          color: _kParchment.withOpacity(0.7),
           letterSpacing: 2,
+          color: config.onSurfaceVariant,
         ),
       );
     }
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         for (int i = 0; i < count; i++)
           AnimatedContainer(
             duration: GS.fast,
             curve: GS.smooth,
             margin: const EdgeInsets.symmetric(horizontal: 3),
-            width: i == index ? 16 : 5,
-            height: 5,
+            width: i == index ? 18 : 6,
+            height: 6,
             decoration: BoxDecoration(
-              color: i == index ? _kGold : _kParchment.withOpacity(0.3),
+              color:
+                  i == index ? config.accent : config.onSurface.withOpacity(0.18),
               borderRadius: BorderRadius.circular(GS.r4),
             ),
           ),
@@ -511,461 +656,256 @@ class _PageDots extends StatelessWidget {
   }
 }
 
-class _CircleBtn extends StatelessWidget {
-  const _CircleBtn({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
+class _VisitPage extends StatelessWidget {
+  const _VisitPage({required this.visit, required this.config});
+  final Visit visit;
+  final GastroThemeConfig config;
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          shape: BoxShape.circle,
-          border: Border.all(color: _kGold.withOpacity(0.25)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Icon(icon, color: _kParchment, size: 18),
-      ),
-    );
-  }
-}
-
-class _PassportFrame extends StatelessWidget {
-  const _PassportFrame({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF3D2818).withOpacity(0.8),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.55),
-            blurRadius: 40,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: child,
-      ),
-    );
-  }
-}
-
-class _CoverPanel extends StatelessWidget {
-  const _CoverPanel({
-    required this.visitCount,
-    required this.holderName,
-    required this.holderId,
-    required this.onOpen,
-  });
-  final int visitCount;
-  final String? holderName;
-  final String? holderId;
-  final VoidCallback onOpen;
-
-  /// Last 6 alphanumeric chars of the user id — what we deboss on the cover.
-  String get _coverGastroId {
-    if (holderId == null || holderId!.isEmpty) return 'XXXXXX';
-    final clean = holderId!
-        .replaceAll(RegExp('[^0-9a-fA-F]'), '')
-        .toUpperCase();
-    if (clean.length < 6) return clean.padRight(6, 'X');
-    return clean.substring(clean.length - 6);
+  String _formattedDate() {
+    try {
+      return DateFormat.yMMMMd().format(DateTime.parse(visit.visitedOn));
+    } catch (_) {
+      return visit.visitedOn;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onOpen,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF6B1F1F), Color(0xFF3D0E0E), Color(0xFF200505)],
-          ),
-        ),
-        child: Stack(
-          children: [
-            // Subtle embossed leather grain + corner sheen.
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(painter: _LeatherGrainPainter()),
-              ),
-            ),
+    final country = visit.country;
+    final name = country?.name ?? 'Somewhere delicious';
+    final flag = country?.flagEmoji ?? '🍽';
+    final iso = country?.isoA2 ?? '';
+    final region = country?.region ?? '';
+    final subregion = country?.subregion ?? '';
+    final dish = dishFor(isoA2: iso, region: region);
+    final photo = (visit.photoPath != null && visit.photoPath!.isNotEmpty)
+        ? visit.photoPath!
+        : dish.imageUrl;
 
-            // Inset double gold frame — like a real passport's debossed border.
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.all(GS.s16),
-                child: IgnorePointer(
-                  child: CustomPaint(painter: _CoverFramePainter()),
-                ),
-              ),
-            ),
-
-            // Washi-tape flourish across the top corner.
-            Positioned(
-              left: -20,
-              top: 30,
-              child: Transform.rotate(
-                angle: -0.62,
-                child: SizedBox(
-                  width: 86,
-                  height: 18,
-                  child: CustomPaint(
-                    painter: WashiTapePainter(
-                      color: const Color(0xFFD4A843),
-                      pattern: WashiPattern.stripes,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(GS.s20, GS.s4, GS.s20, GS.s24),
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Photo hero with the country stamp overlaid.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(GS.r24),
+            child: Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: CachedNetworkImage(
+                    imageUrl: photo,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) =>
+                        Container(color: config.surfaceVariant),
+                    errorWidget: (_, __, ___) => Container(
+                      color: config.surfaceVariant,
+                      alignment: Alignment.center,
+                      child: Text(flag,
+                          style: const TextStyle(fontSize: 48)),
                     ),
                   ),
                 ),
-              ),
-            ),
-
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'REPUBLIC OF GASTRONOMY',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 10,
-                      color: _kGold,
-                      letterSpacing: 3.5,
-                    ),
-                  ).animate().fadeIn(duration: GS.slow),
-                  const SizedBox(height: GS.s24),
-                  // Embossed crest emblem with concentric gold rings.
-                  Container(
-                    width: 108,
-                    height: 108,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        center: const Alignment(-0.3, -0.3),
-                        colors: [
-                          _kGold.withOpacity(0.18),
-                          Colors.transparent,
-                        ],
-                      ),
-                      border: Border.all(
-                        color: _kGold.withOpacity(0.85),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.5),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(GS.s8),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _kGold.withOpacity(0.4),
-                          ),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.restaurant_rounded,
-                            size: 42,
-                            color: _kGold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                      .animate()
-                      .fadeIn(duration: GS.slow, delay: GS.micro)
-                      .scale(
-                        begin: const Offset(0.7, 0.7),
-                        end: const Offset(1, 1),
-                        curve: GS.spring,
-                        duration: GS.xslow,
-                      ),
-                  const SizedBox(height: GS.s24),
-                  Text(
-                    'PASSPORT',
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 38,
-                      fontWeight: FontWeight.w800,
-                      color: _kGold,
-                      letterSpacing: 8,
-                    ),
-                  ).animate().fadeIn(duration: GS.slow, delay: GS.fast),
-                  const SizedBox(height: GS.s4),
-                  Container(
-                    width: 50,
-                    height: 1.2,
-                    color: _kGold.withOpacity(0.6),
-                  ),
-                  const SizedBox(height: GS.s8),
-                  Text(
-                    '$visitCount ${visitCount == 1 ? 'country' : 'countries'} tasted',
-                    style: GoogleFonts.caveat(
-                      fontSize: 19,
-                      color: _kParchment.withOpacity(0.75),
-                    ),
-                  ).animate().fadeIn(duration: GS.slow, delay: GS.normal),
-                  const SizedBox(height: GS.s24),
-                  // Embossed holder name — gold-on-leather, with a stacked
-                  // darker shadow beneath simulating the debossed bevel.
-                  _EmbossedText(
-                    text: (holderName ?? 'GASTRO TRAVELLER').toUpperCase(),
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: _kGold,
-                      letterSpacing: 4,
-                    ),
-                  ).animate().fadeIn(duration: GS.slow, delay: GS.slow),
-                  const SizedBox(height: GS.s4),
-                  _EmbossedText(
-                    text: 'GASTRO ID N° $_coverGastroId',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: _kGold.withOpacity(0.9),
-                      letterSpacing: 2.4,
-                    ),
-                  ).animate().fadeIn(duration: GS.slow, delay: GS.xslow),
-                ],
-              ),
-            ),
-
-            // Cover tagline anchored above the "tap to open" hint.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 78,
-              child: Center(
-                child: _EmbossedText(
-                  text: 'ONE WORLD  ·  ONE TABLE',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w700,
-                    color: _kGold.withOpacity(0.85),
-                    letterSpacing: 3.2,
-                  ),
-                ),
-              ),
-            ),
-
-            // Botanical sprig tucked in the lower-right.
-            Positioned(
-              right: 26,
-              bottom: 70,
-              child: Transform.rotate(
-                angle: 0.2,
-                child: SizedBox(
-                  width: 34,
-                  height: 74,
-                  child: CustomPaint(
-                    painter: BotanicalSprigPainter(
-                      color: _kGold.withOpacity(0.7),
-                      seed: 9,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: GS.s28,
-              child: Column(
-                children: [
-                  const Icon(Icons.touch_app_rounded,
-                      color: _kGold, size: 22)
-                      .animate(
-                        onPlay: (c) => c.repeat(reverse: true),
-                      )
-                      .moveY(
-                        begin: 0,
-                        end: -5,
-                        duration: const Duration(milliseconds: 1100),
-                        curve: Curves.easeInOut,
-                      ),
-                  const SizedBox(height: GS.s6),
-                  Text(
-                    'tap to open the book',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9,
-                      color: _kGold,
-                      letterSpacing: 2.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Gold-on-leather embossed text. A darker bevel layer is offset down-right
-/// to simulate the debossed press, then the bright gold sits on top with a
-/// soft inner shadow giving the letters depth without needing an SVG.
-class _EmbossedText extends StatelessWidget {
-  const _EmbossedText({required this.text, required this.style});
-  final String text;
-  final TextStyle style;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Dark bevel sitting just below + right of the gold — reads as deboss.
-        Transform.translate(
-          offset: const Offset(0.6, 0.8),
-          child: Text(
-            text,
-            style: style.copyWith(
-              color: Colors.black.withOpacity(0.55),
-              shadows: const [
-                Shadow(
-                  color: Color(0x66000000),
-                  blurRadius: 1.4,
-                  offset: Offset(0.3, 0.5),
+                Positioned(
+                  top: GS.s12,
+                  right: GS.s12,
+                  child: _CountryStamp(
+                      iso: iso, date: _formattedDate(), config: config),
                 ),
               ],
             ),
           ),
-        ),
-        // Top highlight rim catching the cover sheen.
-        Transform.translate(
-          offset: const Offset(-0.4, -0.6),
+
+          const SizedBox(height: GS.s16),
+
+          // Flag + country.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(flag, style: const TextStyle(fontSize: 30)),
+              const SizedBox(width: GS.s12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: GoogleFonts.playfairDisplay(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: config.onSurface,
+                        height: 1.05,
+                      ),
+                    ),
+                    if (subregion.isNotEmpty || region.isNotEmpty)
+                      Text(
+                        [subregion, region]
+                            .where((s) => s.isNotEmpty)
+                            .join(' · '),
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 10,
+                          letterSpacing: 1,
+                          color: config.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: GS.s16),
+
+          // Meta rows.
+          _MetaRow(
+            icon: Icons.event_rounded,
+            text: _formattedDate(),
+            config: config,
+          ),
+          if (visit.restaurantName != null &&
+              visit.restaurantName!.trim().isNotEmpty) ...[
+            const SizedBox(height: GS.s8),
+            _MetaRow(
+              icon: Icons.place_rounded,
+              text: visit.restaurantName!,
+              config: config,
+            ),
+          ],
+          const SizedBox(height: GS.s8),
+          _MetaRow(
+            icon: Icons.restaurant_rounded,
+            text: 'Signature dish · ${dish.dish}',
+            config: config,
+          ),
+
+          const SizedBox(height: GS.s16),
+          _Stars(rating: visit.rating, config: config),
+
+          if (visit.notes.trim().isNotEmpty) ...[
+            const SizedBox(height: GS.s16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(GS.s16),
+              decoration: BoxDecoration(
+                color: config.surfaceVariant,
+                borderRadius: BorderRadius.circular(GS.r16),
+              ),
+              child: Text(
+                '“${visit.notes.trim()}”',
+                style: GoogleFonts.caveat(
+                  fontSize: 18,
+                  color: config.onSurface,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    )
+        .animate(key: ValueKey(visit.id))
+        .fadeIn(duration: GS.normal, curve: GS.smooth);
+  }
+}
+
+class _MetaRow extends StatelessWidget {
+  const _MetaRow(
+      {required this.icon, required this.text, required this.config});
+  final IconData icon;
+  final String text;
+  final GastroThemeConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 15, color: config.accent),
+        const SizedBox(width: GS.s8),
+        Expanded(
           child: Text(
             text,
-            style: style.copyWith(
-              color: const Color(0xFFFFE9B0).withOpacity(0.6),
+            style: GoogleFonts.hankenGrotesk(
+              fontSize: 13.5,
+              color: config.onSurfaceVariant,
+              height: 1.3,
             ),
           ),
         ),
-        // Gold face on top.
-        Text(text, style: style),
       ],
     );
   }
 }
 
-/// Debossed double-line gold frame around the leather cover.
-class _CoverFramePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final outer = Paint()
-      ..color = _kGold.withOpacity(0.55)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
-    final inner = Paint()
-      ..color = _kGold.withOpacity(0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(GS.r4)),
-      outer,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect.deflate(6), const Radius.circular(GS.r4)),
-      inner,
-    );
-    // Corner ornaments.
-    final dot = Paint()..color = _kGold.withOpacity(0.6);
-    for (final c in [
-      rect.topLeft,
-      rect.topRight,
-      rect.bottomLeft,
-      rect.bottomRight,
-    ]) {
-      final sx = c.dx < size.width / 2 ? 1 : -1;
-      final sy = c.dy < size.height / 2 ? 1 : -1;
-      canvas.drawCircle(
-        Offset(c.dx + sx * 13, c.dy + sy * 13),
-        2.2,
-        dot,
-      );
-    }
-  }
+class _Stars extends StatelessWidget {
+  const _Stars({required this.rating, required this.config});
+  final int rating;
+  final GastroThemeConfig config;
 
-  @override
-  bool shouldRepaint(covariant _CoverFramePainter oldDelegate) => false;
-}
-
-/// Soft diagonal leather-grain sheen for the passport cover.
-class _LeatherGrainPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    // Top-left light sheen.
-    canvas.drawRect(
-      rect,
-      Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-0.6, -0.7),
-          radius: 1.1,
-          colors: [
-            Colors.white.withOpacity(0.06),
-            Colors.transparent,
-          ],
-        ).createShader(rect),
-    );
-    // Faint horizontal grain striations.
-    final grain = Paint()
-      ..color = Colors.black.withOpacity(0.06)
-      ..strokeWidth = 0.7;
-    final rand = math.Random(7);
-    for (double y = 0; y < size.height; y += 5 + rand.nextDouble() * 4) {
-      final off = math.sin(y * 0.05) * 3;
-      canvas.drawLine(
-        Offset(-2 + off, y),
-        Offset(size.width + 2 + off, y),
-        grain,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _LeatherGrainPainter oldDelegate) => false;
-}
-
-class _WoodBackdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment.center,
-          radius: 1.1,
-          colors: [Color(0xFF2A1A0F), Color(0xFF0D0805)],
+    final r = rating.clamp(0, 5);
+    return Row(
+      children: [
+        for (int i = 1; i <= 5; i++)
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Icon(
+              i <= r ? Icons.star_rounded : Icons.star_outline_rounded,
+              size: 22,
+              color: i <= r ? config.accent : config.onSurfaceVariant.withOpacity(0.4),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A small circular "entry stamp" — country code + date, lightly rotated, in
+/// the accent colour. A modern nod to a passport stamp without the skeuomorphic
+/// rubber-ink texture.
+class _CountryStamp extends StatelessWidget {
+  const _CountryStamp(
+      {required this.iso, required this.date, required this.config});
+  final String iso;
+  final String date;
+  final GastroThemeConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = iso.isEmpty ? 'GV' : iso.toUpperCase();
+    return Transform.rotate(
+      angle: -0.12,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: GS.s10, vertical: GS.s6),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.35),
+          borderRadius: BorderRadius.circular(GS.r10),
+          border: Border.all(color: Colors.white.withOpacity(0.7), width: 1.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              code,
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              'TASTED',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 6.5,
+                letterSpacing: 1.5,
+                color: Colors.white.withOpacity(0.85),
+              ),
+            ),
+          ],
         ),
       ),
     );

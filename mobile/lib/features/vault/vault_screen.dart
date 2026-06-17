@@ -13,14 +13,18 @@ import 'package:mobile/features/vault/widgets/vault_header.dart';
 import 'package:mobile/features/vault/widgets/vault_loading.dart';
 import 'package:mobile/ui/ui.dart';
 
-void _openPassport(BuildContext context, List<Visit> visits, int index) {
+void _openPassport(BuildContext context, List<Visit> visits, int index,
+    {bool openImmediately = false}) {
   Navigator.of(context).push(
     PageRouteBuilder(
       transitionDuration: const Duration(milliseconds: 550),
       reverseTransitionDuration: const Duration(milliseconds: 400),
       opaque: true,
-      pageBuilder: (_, __, ___) =>
-          PassportScreen(visits: visits, initialVisitIndex: index),
+      pageBuilder: (_, __, ___) => PassportScreen(
+        visits: visits,
+        initialVisitIndex: index,
+        openImmediately: openImmediately,
+      ),
       transitionsBuilder: (_, animation, __, child) {
         final fade = CurvedAnimation(parent: animation, curve: Curves.easeOut);
         final scale = Tween<double>(begin: 0.88, end: 1.0)
@@ -109,7 +113,8 @@ class VaultScreen extends ConsumerWidget {
                         isLast: i == visits.length - 1,
                         config: config,
                         index: i,
-                        onTap: () => _openPassport(context, visits, i),
+                        onTap: () =>
+                            _openPassport(context, visits, i, openImmediately: true),
                         onDelete: () async {
                           await ref
                               .read(apiClientProvider)
