@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -683,10 +684,16 @@ class _CountryMapCardState extends State<_CountryMapCard> {
   }
 
   Future<bool> _checkAsset() async {
+    // Check the real AssetManifest rather than bundle.load(). On Flutter web a
+    // missing asset request is caught by the SPA rewrite and answered with
+    // index.html (HTTP 200 + HTML), so load() would falsely "succeed" and then
+    // flutter_svg would try to parse HTML as SVG and throw an uncaught error.
+    // The manifest only lists assets actually bundled at build time.
     try {
-      final path = 'assets/maps/countries/${widget.country.isoA2.toLowerCase()}.svg';
-      await DefaultAssetBundle.of(context).load(path);
-      return true;
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      final path =
+          'assets/maps/countries/${widget.country.isoA2.toLowerCase()}.svg';
+      return manifest.listAssets().contains(path);
     } catch (_) {
       return false;
     }

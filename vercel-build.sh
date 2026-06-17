@@ -39,9 +39,7 @@ echo "──> Building web bundle"
 # API_URL is passed in via Vercel env vars; falls back to the default in
 # api_client.dart if not set so a local Vercel preview still builds.
 API_URL_ARG="${API_URL:-http://10.0.2.2:8000}"
-# --source-maps: ship main.dart.js.map so production console stack traces show
-# real Dart file:line (temporary, for diagnosing a runtime error; remove later).
-flutter build web --release --source-maps --dart-define="API_URL=$API_URL_ARG"
+flutter build web --release --dart-define="API_URL=$API_URL_ARG"
 
 echo "──> Done. mobile/build/web contents:"
 ls -la build/web | head -20
