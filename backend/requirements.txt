@@ -3,4 +3,7 @@ uvicorn[standard]==0.30.6
 supabase==2.10.0
 pydantic-settings==2.4.0
 python-multipart==0.0.9
-anthropic==0.92.0
+# Gemini (free tier) via its OpenAI-compatible endpoint. The official
+# `openai` SDK keeps httpx <0.28, which stays compatible with supabase 2.10.0
+# (the native google-genai SDK would force httpx >=0.28 and break supabase).
+openai==2.42.0

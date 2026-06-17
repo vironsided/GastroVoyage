@@ -93,3 +93,4 @@ Untitled.pdf
 # ─── Session transcripts (one-off, not project files) ─────────────────────────
 2026-*-this-session-is-being-continued*.txt
 **/2026-*-this-session-is-being-continued*.txt
+.vercel

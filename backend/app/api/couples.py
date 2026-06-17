@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from app.api.notifications import enqueue_notification
 from app.core.auth import current_user_id
 from app.core.supabase_client import get_supabase
-from app.services.ai_client import AI_MODEL, get_anthropic_client
+from app.services.ai_client import ai_generate_structured
 
 router = APIRouter(prefix="/couples", tags=["couples"])
 
@@ -628,35 +628,22 @@ async def couple_wrapped(user_id: str = Depends(current_user_id)):
         f"Standout 5/5 plates (up to 5):\n" + "\n".join(top_lines[:5])
     )
 
-    client = get_anthropic_client()
-    try:
-        response = client.messages.parse(
-            model=AI_MODEL,
-            max_tokens=4000,
-            thinking={"type": "adaptive"},
-            system=(
-                "You write a multi-scene 'Couple Wrapped' for two people on "
-                "GastroVoyage. The tone is warm, scrapbook, lightly poetic — "
-                "think a handwritten travel journal. Address the couple as "
-                "'you two'. Each scene is a swipeable card. Vary the angle "
-                "per scene — e.g. the count, the cuisine they leaned into, "
-                "the standout plate, the country that surprised them, the "
-                "throughline. Never mention specific dates; refer to time as "
-                "'this stretch' or 'lately'. No emoji in body text."
-            ),
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"Material to build the Wrapped from:\n\n{summary}\n\n"
-                        "Compose 4-5 distinct scenes plus a top headline and "
-                        "a closing line."
-                    ),
-                }
-            ],
-            output_format=CoupleWrapped,
-        )
-    except Exception as e:
-        raise HTTPException(502, f"Claude call failed: {e}") from e
-
-    return response.parsed_output
+    return ai_generate_structured(
+        system=(
+            "You write a multi-scene 'Couple Wrapped' for two people on "
+            "GastroVoyage. The tone is warm, scrapbook, lightly poetic — "
+            "think a handwritten travel journal. Address the couple as "
+            "'you two'. Each scene is a swipeable card. Vary the angle "
+            "per scene — e.g. the count, the cuisine they leaned into, "
+            "the standout plate, the country that surprised them, the "
+            "throughline. Never mention specific dates; refer to time as "
+            "'this stretch' or 'lately'. No emoji in body text."
+        ),
+        user_text=(
+            f"Material to build the Wrapped from:\n\n{summary}\n\n"
+            "Compose 4-5 distinct scenes plus a top headline and "
+            "a closing line."
+        ),
+        schema=CoupleWrapped,
+        max_tokens=4000,
+    )

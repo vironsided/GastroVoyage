@@ -20,6 +20,11 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
+      # Free Gemini API key (https://aistudio.google.com/apikey) — powers the
+      # /ai/* and /couples/wrapped features. When unset every AI endpoint
+      # returns a uniform 503 and the rest of the API stays healthy.
+      - key: GEMINI_API_KEY
+        sync: false
       # If your auth module uses additional env vars (JWT_SECRET, etc.) add
       # them here with `sync: false` so Render prompts you to fill them in
       # the dashboard without committing secrets to the repo.

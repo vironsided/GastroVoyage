@@ -1,4 +1,4 @@
-"""AI-powered endpoints — Claude Opus 4.7 backed.
+"""AI-powered endpoints — Gemini (free tier) backed.
 
 Four features, each under `/ai/...`:
 
@@ -9,7 +9,7 @@ Four features, each under `/ai/...`:
   2. GET  /ai/cuisine-recommendations — analyzes the viewer's recent
                                          visits and recommends 3 new
                                          cuisines to try.
-  3. POST /ai/parse-visit-photo     — Claude vision parses an uploaded
+  3. POST /ai/parse-visit-photo     — Gemini vision parses an uploaded
                                        photo into {dish, country guess,
                                        suggested ratings, notes} so the
                                        user can pre-fill the visit form.
@@ -19,13 +19,11 @@ the other couple endpoints.
 
 Every endpoint:
   • Authenticates via Depends(current_user_id) — no user_id from body.
-  • Returns 503 (not 500) when ANTHROPIC_API_KEY is missing.
-  • Uses Claude's `messages.parse()` with a Pydantic schema for any
-    response Mobile needs to render structurally.
-  • Uses adaptive thinking — Claude decides whether to think.
+  • Returns 503 (not 500) when GEMINI_API_KEY is missing.
+  • Goes through `ai_generate_structured()`, which returns a validated
+    Pydantic instance for any response Mobile needs to render structurally.
 """
 
-import base64
 import random
 from typing import Literal
 
@@ -35,7 +33,7 @@ from pydantic import BaseModel, Field
 from app.api.couples import _fetch_active_couple
 from app.core.auth import current_user_id
 from app.core.supabase_client import get_supabase
-from app.services.ai_client import AI_MODEL, get_anthropic_client
+from app.services.ai_client import ai_generate_structured
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -191,40 +189,27 @@ async def ai_date_night(user_id: str = Depends(current_user_id)):
     # ── Past 5 joint visits as flavor context ──────────────────────────────
     recent_summary = _recent_joint_summary(sb, user_id, partner_id, limit=5)
 
-    # ── Ask Claude for a Date Night card ───────────────────────────────────
-    client = get_anthropic_client()
-    try:
-        response = client.messages.parse(
-            model=AI_MODEL,
-            max_tokens=2000,
-            thinking={"type": "adaptive"},
-            system=(
-                "You are the kitchen sidekick for a couple using GastroVoyage, "
-                "a scrapbook-style culinary passport app. Your tone is warm, "
-                "lightly poetic, and addresses both partners as 'you two'. "
-                "Never use emoji in body text (only flag_emoji field). "
-                "Steps must be doable at home in under 90 minutes with a "
-                "standard kitchen — assume the couple isn't a chef."
-            ),
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"Cuisine to feature tonight: {country['name']} "
-                        f"({country.get('flag_emoji') or ''}). "
-                        f"Subregion: {country.get('subregion') or country.get('region') or 'unknown'}.\n\n"
-                        f"Recent joint plates the couple has shared:\n{recent_summary}\n\n"
-                        "Pick ONE specific dish from this cuisine that fits a "
-                        "Date Night cook at home. Write a Date Night card."
-                    ),
-                }
-            ],
-            output_format=DateNightSuggestion,
-        )
-    except Exception as e:
-        raise HTTPException(502, f"Claude call failed: {e}") from e
-
-    pick: DateNightSuggestion = response.parsed_output  # type: ignore[assignment]
+    # ── Ask Gemini for a Date Night card ───────────────────────────────────
+    pick = ai_generate_structured(
+        system=(
+            "You are the kitchen sidekick for a couple using GastroVoyage, "
+            "a scrapbook-style culinary passport app. Your tone is warm, "
+            "lightly poetic, and addresses both partners as 'you two'. "
+            "Never use emoji in body text (only flag_emoji field). "
+            "Steps must be doable at home in under 90 minutes with a "
+            "standard kitchen — assume the couple isn't a chef."
+        ),
+        user_text=(
+            f"Cuisine to feature tonight: {country['name']} "
+            f"({country.get('flag_emoji') or ''}). "
+            f"Subregion: {country.get('subregion') or country.get('region') or 'unknown'}.\n\n"
+            f"Recent joint plates the couple has shared:\n{recent_summary}\n\n"
+            "Pick ONE specific dish from this cuisine that fits a "
+            "Date Night cook at home. Write a Date Night card."
+        ),
+        schema=DateNightSuggestion,
+        max_tokens=2000,
+    )
     # Always trust our country data over the model's echo — keeps flag/name
     # consistent with the DB even if Claude slightly varies the spelling.
     pick.country_name = country["name"]
@@ -309,37 +294,24 @@ async def ai_cuisine_recommendations(user_id: str = Depends(current_user_id)):
         for c in sample
     )
 
-    client = get_anthropic_client()
-    try:
-        response = client.messages.parse(
-            model=AI_MODEL,
-            max_tokens=2000,
-            thinking={"type": "adaptive"},
-            system=(
-                "You recommend cuisines to a GastroVoyage user based on their "
-                "taste history. Pick exactly 3 cuisines from the untasted "
-                "list that complement what they've enjoyed. Each reasoning "
-                "must reference a specific past visit. Tone: warm, "
-                "scrapbook-paper, lightly poetic. No emoji in body text."
-            ),
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"Past visits (newest first):\n{'\n'.join(history_lines)}\n\n"
-                        f"Untasted countries to choose from:\n{untasted_summary}\n\n"
-                        "Recommend 3 cuisines this person should try next."
-                    ),
-                }
-            ],
-            output_format=CuisineRecommendations,
-        )
-    except Exception as e:
-        raise HTTPException(502, f"Claude call failed: {e}") from e
+    recs = ai_generate_structured(
+        system=(
+            "You recommend cuisines to a GastroVoyage user based on their "
+            "taste history. Pick exactly 3 cuisines from the untasted "
+            "list that complement what they've enjoyed. Each reasoning "
+            "must reference a specific past visit. Tone: warm, "
+            "scrapbook-paper, lightly poetic. No emoji in body text."
+        ),
+        user_text=(
+            f"Past visits (newest first):\n{'\n'.join(history_lines)}\n\n"
+            f"Untasted countries to choose from:\n{untasted_summary}\n\n"
+            "Recommend 3 cuisines this person should try next."
+        ),
+        schema=CuisineRecommendations,
+        max_tokens=2000,
+    )
 
-    recs: CuisineRecommendations = response.parsed_output  # type: ignore[assignment]
-
-    # Backfill flag emojis from our DB when Claude doesn't have them.
+    # Backfill flag emojis from our DB when the model doesn't have them.
     by_name = {c["name"].lower(): c for c in untasted_pool}
     for item in recs.items:
         if not item.flag_emoji:
@@ -351,7 +323,7 @@ async def ai_cuisine_recommendations(user_id: str = Depends(current_user_id)):
 
 # ─── 3. Photo → pre-filled visit ────────────────────────────────────────────
 
-# Accepted by Claude vision: JPEG/PNG/GIF/WebP. Anything else → 415.
+# Accepted by Gemini vision: JPEG/PNG/GIF/WebP. Anything else → 415.
 _VISION_MIME_TYPES = {
     "image/jpeg",
     "image/jpg",
@@ -359,7 +331,7 @@ _VISION_MIME_TYPES = {
     "image/gif",
     "image/webp",
 }
-_MAX_PHOTO_BYTES = 8 * 1024 * 1024  # 8 MB — comfortable headroom under Claude's limit
+_MAX_PHOTO_BYTES = 8 * 1024 * 1024  # 8 MB — comfortable headroom under Gemini's limit
 
 
 @router.post("/parse-visit-photo", response_model=VisitPhotoParse)
@@ -369,7 +341,7 @@ async def ai_parse_visit_photo(
 ):
     """Take a restaurant/dish photo and pre-fill a visit-form suggestion.
 
-    Mobile sends the raw bytes; we forward to Claude vision as base64.
+    Mobile sends the raw bytes; we forward them to Gemini vision.
     The response is best-effort — Mobile shows fields as suggestions
     the user can override before saving the visit.
     """
@@ -386,52 +358,25 @@ async def ai_parse_visit_photo(
         raise HTTPException(
             413, "Image too large — please send under 8 MB."
         )
-    b64 = base64.standard_b64encode(data).decode("ascii")
-
-    client = get_anthropic_client()
-    try:
-        response = client.messages.parse(
-            model=AI_MODEL,
-            max_tokens=1500,
-            thinking={"type": "adaptive"},
-            system=(
-                "You are a food identification assistant for GastroVoyage. "
-                "Look at the photo and identify the dish, the most likely "
-                "cuisine/country, and (only if visible) any restaurant text. "
-                "Suggest ratings ONLY if there's a strong visual signal — "
-                "leave them null when unsure. Never fabricate restaurant names. "
-                "Notes should be a warm 1-line journal entry."
-            ),
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": mime,
-                                "data": b64,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                "Identify this food. What dish is it, most likely "
-                                "from which cuisine? If any restaurant signage or "
-                                "menu text is visible, include it verbatim. "
-                                "Otherwise leave restaurant_visible_text null."
-                            ),
-                        },
-                    ],
-                }
-            ],
-            output_format=VisitPhotoParse,
-        )
-    except Exception as e:
-        raise HTTPException(502, f"Claude vision call failed: {e}") from e
-
-    return response.parsed_output
+    return ai_generate_structured(
+        system=(
+            "You are a food identification assistant for GastroVoyage. "
+            "Look at the photo and identify the dish, the most likely "
+            "cuisine/country, and (only if visible) any restaurant text. "
+            "Suggest ratings ONLY if there's a strong visual signal — "
+            "leave them null when unsure. Never fabricate restaurant names. "
+            "Notes should be a warm 1-line journal entry."
+        ),
+        user_text=(
+            "Identify this food. What dish is it, most likely "
+            "from which cuisine? If any restaurant signage or "
+            "menu text is visible, include it verbatim. "
+            "Otherwise leave restaurant_visible_text null."
+        ),
+        schema=VisitPhotoParse,
+        max_tokens=1500,
+        image=(mime, data),
+    )
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
