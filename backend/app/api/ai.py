@@ -311,13 +311,16 @@ async def ai_cuisine_recommendations(user_id: str = Depends(current_user_id)):
         max_tokens=2000,
     )
 
-    # Backfill flag emojis from our DB when the model doesn't have them.
+    # The model's flag_emoji is unreliable (Gemini returns tabs/newlines or raw
+    # surrogate code-unit text like "\tud83cuddf1"), so ALWAYS derive the flag
+    # from our own country data and never display the model's value. A long
+    # garbage string also wrecked the card layout (text squished vertically).
     by_name = {c["name"].lower(): c for c in untasted_pool}
     for item in recs.items:
-        if not item.flag_emoji:
-            row = by_name.get(item.country_name.lower())
-            if row and row.get("flag_emoji"):
-                item.flag_emoji = row["flag_emoji"]
+        row = by_name.get(item.country_name.lower())
+        item.flag_emoji = (
+            row["flag_emoji"] if row and row.get("flag_emoji") else None
+        )
     return recs
 
 

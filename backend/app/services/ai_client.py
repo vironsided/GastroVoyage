@@ -111,7 +111,17 @@ def ai_generate_structured(
             # budget before emitting the JSON (would truncate the output).
             reasoning_effort="none",
         )
-    except Exception as e:  # noqa: BLE001 — surface any upstream failure as 502
+    except Exception as e:  # noqa: BLE001 — surface upstream failures cleanly
+        # Gemini's free tier has per-minute and per-day rate limits; surface a
+        # distinct, friendly 503 instead of a generic 502 so the UI can say
+        # "busy, try again" rather than "failed".
+        status = getattr(e, "status_code", None)
+        if status == 429 or "429" in str(e) or "quota" in str(e).lower():
+            raise HTTPException(
+                status_code=503,
+                detail="AI is busy right now (free-tier rate limit). "
+                "Give it a minute and try again.",
+            ) from e
         raise HTTPException(status_code=502, detail=f"AI call failed: {e}") from e
 
     parsed = completion.choices[0].message.parsed
