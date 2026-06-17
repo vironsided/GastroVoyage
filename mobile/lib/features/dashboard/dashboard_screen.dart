@@ -7,10 +7,11 @@ import 'package:mobile/app/providers.dart';
 import 'package:mobile/features/social/data/social_providers.dart';
 import 'package:mobile/ui/ui.dart';
 
-import 'widgets/badges_section.dart';
+import 'widgets/achievements_link_card.dart';
 import 'widgets/cuisine_recommendations_card.dart';
 import 'widgets/daily_dish_card.dart';
 import 'widgets/dashboard_stories_strip.dart';
+import 'widgets/discover_baku_card.dart';
 import 'widgets/editorial_header.dart';
 import 'widgets/journey_feature_card.dart';
 import 'widgets/next_bite_card.dart';
@@ -22,10 +23,16 @@ import 'widgets/wrapped_card.dart';
 
 // ─── Dashboard Screen ─────────────────────────────────────────────────────────
 //
-// A "culinary passport" scrapbook page: a paper-grain backdrop, a passport
-// progress card sealed with wax, a carousel of polaroid visit clippings, and
-// an achievements wall of inked stamps. Visual composition only — provider
-// wiring and navigation are untouched.
+// A "culinary passport" scrapbook page. Phase 3 reorganises the old flat promo
+// stack into labelled sections that lead with the user's own data and the
+// flagship city (Baku), then group the Couples/AI flagship features under a
+// single "Featured" header so they stay prominent without crowding the top.
+//
+//   Your Passport   →  couple hero + passport progress (your data leads)
+//   Discover        →  Baku food map + today's dish (the hero, up top)
+//   Featured        →  Couples journey + AI recs + next bite + wrapped
+//   Recently Tasted →  visit clippings carousel
+//   (footer)        →  compact Achievements link (full wall lives on You tab)
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -94,11 +101,21 @@ class DashboardScreen extends ConsumerWidget {
                     GS.s20, 0, GS.s20, GS.navBuffer),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
+                    // ── SECTION: Your Passport ────────────────────────────
+                    // Lead with the user's own data, not a promo stack.
+                    SectionHeader(label: 'Your Passport', config: config)
+                        .animate()
+                        .fadeIn(duration: GS.normal, curve: GS.smooth)
+                        .slideX(
+                            begin: -0.04, end: 0, duration: GS.normal),
+
+                    const SizedBox(height: GS.s12),
+
                     // "We Together" — couple hero card. Self-hides when the
                     // user has no active couple link (returns SizedBox.shrink).
                     WeTogetherCard(config: config),
 
-                    // Passport card.
+                    // Passport progress card.
                     profileAsync.when(
                       data: (p) => PassportCard(profile: p, config: config)
                           .animate()
@@ -114,6 +131,81 @@ class DashboardScreen extends ConsumerWidget {
                     ),
 
                     const SizedBox(height: GS.s24),
+
+                    // ── SECTION: Discover ─────────────────────────────────
+                    // The hero (Baku) up top + a daily discovery pick.
+                    SectionHeader(
+                      label: 'Discover',
+                      config: config,
+                      subtitle: "Baku & today's pick",
+                    )
+                        .animate()
+                        .fadeIn(
+                            duration: GS.normal,
+                            delay: GS.stagger(1),
+                            curve: GS.smooth)
+                        .slideX(
+                            begin: -0.04,
+                            end: 0,
+                            duration: GS.normal,
+                            delay: GS.stagger(1)),
+
+                    const SizedBox(height: GS.s12),
+
+                    // Flagship city entry point → Map tab in Baku mode.
+                    DiscoverBakuCard(config: config)
+                        .animate()
+                        .fadeIn(
+                            duration: GS.normal,
+                            delay: GS.stagger(1),
+                            curve: GS.smooth)
+                        .slideY(
+                            begin: 0.06,
+                            end: 0,
+                            duration: GS.normal,
+                            delay: GS.stagger(1),
+                            curve: GS.smooth),
+
+                    const SizedBox(height: GS.s16),
+
+                    // Today's dish — curated daily rotation (deterministic by
+                    // day-of-year so all users + friends see the same dish on
+                    // the same day). Pure mobile data, no backend.
+                    DailyDishCard(config: config)
+                        .animate()
+                        .fadeIn(
+                            duration: GS.normal,
+                            delay: GS.stagger(2),
+                            curve: GS.smooth)
+                        .slideY(
+                            begin: 0.06,
+                            end: 0,
+                            duration: GS.normal,
+                            delay: GS.stagger(2),
+                            curve: GS.smooth),
+
+                    const SizedBox(height: GS.s24),
+
+                    // ── SECTION: Featured (Couples & AI) ──────────────────
+                    // Flagship features kept prominent, but grouped under one
+                    // header instead of scattered down the page.
+                    SectionHeader(
+                      label: 'Featured',
+                      config: config,
+                      subtitle: 'Made for you',
+                    )
+                        .animate()
+                        .fadeIn(
+                            duration: GS.normal,
+                            delay: GS.stagger(1),
+                            curve: GS.smooth)
+                        .slideX(
+                            begin: -0.04,
+                            end: 0,
+                            duration: GS.normal,
+                            delay: GS.stagger(1)),
+
+                    const SizedBox(height: GS.s12),
 
                     // Featured: Couples' Culinary Journey entry point.
                     JourneyFeatureCard(
@@ -134,26 +226,8 @@ class DashboardScreen extends ConsumerWidget {
 
                     const SizedBox(height: GS.s20),
 
-                    // Today's dish — curated daily rotation (deterministic
-                    // by day-of-year so all users + friends see the same
-                    // dish on the same day). Pure mobile data, no backend.
-                    DailyDishCard(config: config)
-                        .animate()
-                        .fadeIn(
-                            duration: GS.normal,
-                            delay: GS.stagger(2),
-                            curve: GS.smooth)
-                        .slideY(
-                            begin: 0.06,
-                            end: 0,
-                            duration: GS.normal,
-                            delay: GS.stagger(2),
-                            curve: GS.smooth),
-
-                    const SizedBox(height: GS.s20),
-
                     // Featured: AI cuisine recommendations — lazy. Doesn't
-                    // call Claude until the user taps the card, so dashboard
+                    // call the AI until the user taps the card, so dashboard
                     // load stays fast and free.
                     CuisineRecommendationsCard(config: config)
                         .animate()
@@ -171,9 +245,7 @@ class DashboardScreen extends ConsumerWidget {
                     const SizedBox(height: GS.s20),
 
                     // Featured: Next bite to chase — surfaces the topmost
-                    // wishlist country. Self-hides when the wishlist is
-                    // empty, so the dashboard never carves out space for an
-                    // empty featured card.
+                    // wishlist country. Self-hides when the wishlist is empty.
                     NextBiteCard(config: config)
                         .animate()
                         .fadeIn(
@@ -187,9 +259,10 @@ class DashboardScreen extends ConsumerWidget {
                             delay: GS.stagger(2),
                             curve: GS.smooth),
 
+                    const SizedBox(height: GS.s20),
+
                     // Featured: Culinary Wrapped — Spotify-style year reveal.
-                    // Self-hides when the user has < 5 logged visits, so the
-                    // reveal feels earned.
+                    // Self-hides when the user has < 5 logged visits.
                     WrappedCard(config: config)
                         .animate()
                         .fadeIn(
@@ -205,7 +278,7 @@ class DashboardScreen extends ConsumerWidget {
 
                     const SizedBox(height: GS.s24),
 
-                    // Recently Tasted section.
+                    // ── SECTION: Recently Tasted ──────────────────────────
                     SectionHeader(
                       label: 'Recently Tasted',
                       config: config,
@@ -242,46 +315,23 @@ class DashboardScreen extends ConsumerWidget {
 
                     const SizedBox(height: GS.s24),
 
-                    StitchedDivider(config: config)
-                        .animate()
-                        .fadeIn(
-                            duration: GS.normal, delay: GS.stagger(2)),
-
-                    const SizedBox(height: GS.s24),
-
-                    // Achievements section.
-                    SectionHeader(
-                      label: 'Achievements',
-                      config: config,
-                      subtitle: badgesAsync.when(
-                        data: (b) {
-                          final n = b.where((x) => x.earned).length;
-                          return '$n ${n == 1 ? 'stamp' : 'stamps'} earned';
-                        },
-                        loading: () => null,
-                        error: (_, __) => null,
+                    // Compact Achievements link — the full stamp wall now lives
+                    // canonically on the You tab, so Home just taps through.
+                    badgesAsync.when(
+                      data: (badges) => AchievementsLinkCard(
+                        config: config,
+                        earnedCount:
+                            badges.where((x) => x.earned).length,
                       ),
+                      loading: () =>
+                          GastroShimmer(height: 64, config: config),
+                      error: (_, __) => const SizedBox.shrink(),
                     )
                         .animate()
                         .fadeIn(
                             duration: GS.normal,
-                            delay: GS.stagger(3),
-                            curve: GS.smooth)
-                        .slideX(
-                            begin: -0.04,
-                            end: 0,
-                            duration: GS.normal,
-                            delay: GS.stagger(3)),
-
-                    const SizedBox(height: GS.s16),
-
-                    badgesAsync.when(
-                      data: (badges) =>
-                          BadgesWall(badges: badges, config: config),
-                      loading: () =>
-                          GastroShimmer(height: 100, config: config),
-                      error: (_, __) => GastroErrorCard(config: config),
-                    ),
+                            delay: GS.stagger(2),
+                            curve: GS.smooth),
                   ]),
                 ),
               ),

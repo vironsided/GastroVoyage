@@ -28,13 +28,14 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
-  int _tab = 0; // 0 = World, 1 = Baku
-
   @override
   Widget build(BuildContext context) {
     final config = ref.watch(gastroThemeConfigProvider);
     final countriesAsync = ref.watch(mapCountriesProvider);
     final visitsAsync = ref.watch(visitsProvider);
+    // 0 = World, 1 = Baku. Lifted to a provider so Home's "Discover Baku" card
+    // can deep-link straight into Baku mode (see mapModeProvider).
+    final tab = ref.watch(mapModeProvider);
 
     final worldVisited = countriesAsync.maybeWhen(
       data: (c) => c.where((x) => x.visited).length,
@@ -57,7 +58,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
 
     return Scaffold(
-      backgroundColor: _tab == 0
+      backgroundColor: tab == 0
           ? config.mapBackground
           : (config.isDark ? const Color(0xFF141414) : Colors.white),
       body: SafeArea(
@@ -65,7 +66,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           children: [
             // ── Content ──────────────────────────────────────────────────────
             Positioned.fill(
-              child: _tab == 0
+              child: tab == 0
                   ? _WorldMapContent(config: config)
                   // Chips clear the now two-line header.
                   : const BakuMapScreen(filterTopOffset: 92),
@@ -77,12 +78,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               left: 18,
               right: 14,
               child: _MapHeader(
-                title: _tab == 0 ? 'WORLD CUISINE MAP' : 'BAKU FOOD MAP',
-                visitedCount: _tab == 0 ? worldVisited : bakuVisited,
-                totalCount: _tab == 0 ? worldTotal : kBakuRestaurantsCount,
-                tab: _tab,
+                title: tab == 0 ? 'WORLD CUISINE MAP' : 'BAKU FOOD MAP',
+                visitedCount: tab == 0 ? worldVisited : bakuVisited,
+                totalCount: tab == 0 ? worldTotal : kBakuRestaurantsCount,
+                tab: tab,
                 config: config,
-                onSelect: (i) => setState(() => _tab = i),
+                onSelect: (i) =>
+                    ref.read(mapModeProvider.notifier).state = i,
               ),
             ),
           ],

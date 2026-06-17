@@ -286,6 +286,13 @@ class AppTab {
   static const int vault = 3;
 }
 
+/// World (0) vs Baku (1) mode for the Map tab. Lifted out of `MapScreen`'s
+/// local state so the dashboard's "Discover Baku" card can deep-link straight
+/// into the Baku food map (set this to 1, then jump to `AppTab.map`). The Map
+/// tab's segmented toggle also writes here, so the chosen mode persists across
+/// tab switches.
+final mapModeProvider = StateProvider<int>((ref) => 0);
+
 // ─── Couples' Culinary Journey ─────────────────────────────────────────────────
 //
 // How many weeks of the curated couples' journey the user has completed.
