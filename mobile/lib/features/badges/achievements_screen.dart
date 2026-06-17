@@ -102,7 +102,7 @@ class _AchievementsScreenState extends ConsumerState<AchievementsScreen> {
                       child: GastroErrorCard(
                         config: config,
                         message:
-                            'Could not load your stamps. Is the backend running?',
+                            "Couldn't load your stamps. Check your connection and try again.",
                         onRetry: _refresh,
                       ),
                     ),

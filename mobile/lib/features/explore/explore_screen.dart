@@ -407,7 +407,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'CUSTOMS IS OFFLINE',
+                          "CAN'T REACH CUSTOMS",
                           style: GoogleFonts.jetBrainsMono(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -420,8 +420,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                           config: config,
                           icon: LucideIcons.wifiOff,
                           message:
-                              'The discovery desk could not be reached. '
-                              'Is the backend running at port 8000?',
+                              'The discovery desk is unreachable. '
+                              'Check your connection and try again.',
                         ),
                       ],
                     ).animate().fadeIn(duration: 350.ms),

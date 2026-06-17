@@ -36,7 +36,7 @@ class GastroErrorCard extends StatelessWidget {
           const SizedBox(width: GS.s12),
           Expanded(
             child: Text(
-              message ?? 'Could not load. Is the backend running?',
+              message ?? "Couldn't connect right now. Check your connection and try again.",
               style: GoogleFonts.hankenGrotesk(
                 fontSize: 13,
                 color: config.onSurfaceVariant,

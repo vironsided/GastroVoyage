@@ -137,7 +137,7 @@ class VaultScreen extends ConsumerWidget {
                     child: GastroErrorCard(
                       config: config,
                       message:
-                          'Could not open your journal.\nIs the backend running?',
+                          "Couldn't open your journal.\nCheck your connection and try again.",
                       icon: LucideIcons.bookX,
                       onRetry: () => ref.invalidate(visitsProvider),
                     ),

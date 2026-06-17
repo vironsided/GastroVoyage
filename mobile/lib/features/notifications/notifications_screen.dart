@@ -166,7 +166,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         GastroErrorCard(
                           config: config,
                           message:
-                              'Could not load notifications. Is the backend running?',
+                              "Couldn't load notifications. Check your connection and try again.",
                           onRetry: _refresh,
                         ),
                       ],

@@ -37,7 +37,7 @@ const kBakuRestaurants = <BakuRestaurant>[
   BakuRestaurant(name: 'Qarabag', cuisine: 'Azerbaijani', flag: '🇦🇿', lat: 40.3773, lng: 49.8415, neighborhood: 'Center', priceRange: '₼₼', instagram: 'qarabag.baku', address: '4 İstiqlaliyyət St, Baku'),
   // Japanese
   BakuRestaurant(name: 'Tokyo Garden', cuisine: 'Japanese', flag: '🇯🇵', lat: 40.3797, lng: 49.8513, neighborhood: 'Center', priceRange: '₼₼₼', instagram: 'tokyogarden.baku', address: '28 Rasul Rza St, Baku'),
-  BakuRestaurant(name: 'Sumaq', cuisine: 'Japanese', flag: '🇯🇵', lat: 40.3636, lng: 49.8519, neighborhood: 'Bulvar', priceRange: '₼₼', description: 'Sushi bar on the waterfront', instagram: 'sumaq.baku', address: 'Neftçilər Ave, Bulvar'),
+  BakuRestaurant(name: 'Sumaq', cuisine: 'Japanese', flag: '🇯🇵', lat: 40.3683, lng: 49.8519, neighborhood: 'Bulvar', priceRange: '₼₼', description: 'Sushi bar on the waterfront', instagram: 'sumaq.baku', address: 'Neftçilər Ave, Bulvar'),
   BakuRestaurant(name: 'Sakura', cuisine: 'Japanese', flag: '🇯🇵', lat: 40.3802, lng: 49.8490, neighborhood: 'Nizami', priceRange: '₼₼', instagram: 'sakura.baku', address: '56 Nizami St, Baku'),
   // Italian
   BakuRestaurant(name: 'La Piazza', cuisine: 'Italian', flag: '🇮🇹', lat: 40.3790, lng: 49.8480, neighborhood: 'Nizami', priceRange: '₼₼', description: 'Authentic Neapolitan pizza', instagram: 'lapiazza.baku', address: '44 Nizami St, Baku'),
@@ -57,7 +57,7 @@ const kBakuRestaurants = <BakuRestaurant>[
   // Lebanese
   BakuRestaurant(name: 'Beirut', cuisine: 'Lebanese', flag: '🇱🇧', lat: 40.3842, lng: 49.8488, neighborhood: 'Center', priceRange: '₼₼', instagram: 'beirut.baku', address: '8 Mirəli Qaşqay St, Baku'),
   // American
-  BakuRestaurant(name: 'Texas BBQ', cuisine: 'American', flag: '🇺🇸', lat: 40.3640, lng: 49.8533, neighborhood: 'Bulvar', priceRange: '₼₼', instagram: 'texasbbq.baku', address: 'Neftçilər Ave 2, Bulvar Mall'),
+  BakuRestaurant(name: 'Texas BBQ', cuisine: 'American', flag: '🇺🇸', lat: 40.3681, lng: 49.8533, neighborhood: 'Bulvar', priceRange: '₼₼', instagram: 'texasbbq.baku', address: 'Neftçilər Ave 2, Bulvar Mall'),
   BakuRestaurant(name: 'Burger Republic', cuisine: 'American', flag: '🇺🇸', lat: 40.3813, lng: 49.8557, neighborhood: 'Center', priceRange: '₼', instagram: 'burgerrepublic.az', address: '12 Rashid Behbudov St, Baku'),
   // Korean
   BakuRestaurant(name: 'Seoul Garden', cuisine: 'Korean', flag: '🇰🇷', lat: 40.3828, lng: 49.8543, neighborhood: 'Center', priceRange: '₼₼₼', instagram: 'seoulgarden.baku', address: '20 Khagani St, Baku'),

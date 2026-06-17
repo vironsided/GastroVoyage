@@ -97,7 +97,7 @@ class _CouplesJourneyScreenState extends ConsumerState<CouplesJourneyScreen> {
             padding: const EdgeInsets.all(GS.s20),
             child: GastroErrorCard(
               config: config,
-              message: 'Could not load your journey. Is the backend running?',
+              message: "Couldn't load your journey. Check your connection and try again.",
               onRetry: () => ref.invalidate(couplesProgressProvider),
             ),
           ),

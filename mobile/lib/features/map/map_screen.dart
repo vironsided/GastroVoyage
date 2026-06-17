@@ -28,7 +28,7 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
-  int _tab = 0; // 0 = World, 1 = Baku, 2 = Globe
+  int _tab = 0; // 0 = World, 1 = Baku
 
   @override
   Widget build(BuildContext context) {
@@ -57,11 +57,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
 
     return Scaffold(
-      backgroundColor: _tab == 2
+      backgroundColor: _tab == 0
           ? config.mapBackground
-          : _tab == 0
-              ? config.mapBackground
-              : (config.isDark ? const Color(0xFF141414) : Colors.white),
+          : (config.isDark ? const Color(0xFF141414) : Colors.white),
       body: SafeArea(
         child: Stack(
           children: [
@@ -123,7 +121,7 @@ class _WorldMapContent extends ConsumerWidget {
       ),
       error: (e, _) => Center(
         child: Text(
-          'BACKEND OFFLINE\nSTART SERVER AT :8000',
+          "Couldn't load the map.\nCheck your connection and try again.",
           textAlign: TextAlign.center,
           style: GoogleFonts.caveat(
             fontSize: 20,

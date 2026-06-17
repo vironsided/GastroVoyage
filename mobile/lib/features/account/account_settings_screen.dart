@@ -22,7 +22,6 @@ import 'package:mobile/features/notifications/data/notifications_providers.dart'
 import 'package:mobile/features/notifications/notifications_screen.dart';
 import 'package:mobile/features/onboarding/theme_selector_screen.dart';
 import 'package:mobile/features/shared/models.dart';
-import 'package:mobile/features/showcase/showcase_screen.dart';
 import 'package:mobile/features/social/data/social_models.dart';
 import 'package:mobile/features/social/data/social_providers.dart';
 import 'package:mobile/features/social/friends_screen.dart';
@@ -633,19 +632,6 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                               offset: const Offset(0, 2),
                             ),
                           ],
-                        ),
-                      ),
-                    ),
-                    _Divider(config: config),
-                    _SettingsTile(
-                      icon: Icons.palette_outlined,
-                      label: 'Design Showcase',
-                      subtitle: 'Preview every scrapbook component',
-                      config: config,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ShowcaseScreen(),
                         ),
                       ),
                     ),
