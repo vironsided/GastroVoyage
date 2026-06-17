@@ -14,18 +14,12 @@ import 'package:mobile/app/gastro_theme_config.dart';
 import 'package:mobile/app/gs_design.dart';
 import 'package:mobile/app/providers.dart';
 import 'package:mobile/features/auth/login_screen.dart';
-import 'package:mobile/features/badges/achievements_screen.dart';
-import 'package:mobile/features/couples/data/couple_models.dart';
-import 'package:mobile/features/couples/data/couple_providers.dart';
-import 'package:mobile/features/couples/my_couple_screen.dart';
 import 'package:mobile/features/notifications/data/notifications_providers.dart';
 import 'package:mobile/features/notifications/notifications_screen.dart';
 import 'package:mobile/features/onboarding/theme_selector_screen.dart';
 import 'package:mobile/features/shared/models.dart';
 import 'package:mobile/features/social/data/social_models.dart';
 import 'package:mobile/features/social/data/social_providers.dart';
-import 'package:mobile/features/social/friends_screen.dart';
-import 'package:mobile/features/social/stories_feed.dart';
 import 'package:mobile/ui/ui.dart';
 
 // ─── Mode-specific card top decoration ───────────────────────────────────────
@@ -257,56 +251,6 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
             FadeTransition(opacity: a, child: child),
         transitionDuration: GS.normal,
       ),
-    );
-  }
-
-  void _openFriends() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const FriendsScreen()),
-    );
-  }
-
-  /// Opens the partner-linking screen. Invalidates the couple providers on
-  /// return so subtitle / dashboard card reflect any new state immediately.
-  Future<void> _openCouple() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MyCoupleScreen()),
-    );
-    if (!mounted) return;
-    ref.invalidate(myCoupleProvider);
-    ref.invalidate(coupleStatsProvider);
-  }
-
-  /// Short scrapbook-tone subtitle that mirrors the couple state — so the
-  /// user reads their status without opening the screen.
-  String _coupleSubtitle(WidgetRef ref) {
-    final couple = ref.watch(myCoupleProvider).valueOrNull;
-    if (couple == null) return 'Link with the person you taste with';
-    switch (couple.status) {
-      case CoupleStatus.accepted:
-        return 'You & ${couple.partner.name}';
-      case CoupleStatus.pending:
-        return couple.isIncomingPendingForViewer
-            ? '${couple.partner.name} wants to be your couple'
-            : 'Waiting for ${couple.partner.name}…';
-      case CoupleStatus.ended:
-        return 'Link with the person you taste with';
-    }
-  }
-
-  void _openAchievements() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const AchievementsScreen()),
-    );
-  }
-
-  void _openStoriesFeed() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const StoriesFeedScreen()),
     );
   }
 
@@ -651,48 +595,18 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                   ]),
                   const SizedBox(height: GS.s24),
 
-                  // ── Social ──────────────────────────────────────────
+                  // ── Privacy ─────────────────────────────────────────
+                  // Friends, Stories, Achievements and My Couple moved to the
+                  // dedicated "You" tab; Settings keeps only true preferences.
                   _SectionLabel(
-                    label: 'Social',
-                    subtitle: 'Your travel circle',
+                    label: 'Privacy',
+                    subtitle: 'Who can see your passport',
                     config: config,
                     index: 2,
                   ),
                   const SizedBox(height: GS.s12),
 
                   _SectionCard(config: config, index: 2, children: [
-                    _SettingsTile(
-                      icon: Icons.favorite_outline,
-                      label: 'My Couple',
-                      subtitle: _coupleSubtitle(ref),
-                      config: config,
-                      onTap: _openCouple,
-                    ),
-                    _Divider(config: config),
-                    _SettingsTile(
-                      icon: Icons.group_outlined,
-                      label: 'Friends & Followers',
-                      subtitle: 'Find travellers, manage requests',
-                      config: config,
-                      onTap: _openFriends,
-                    ),
-                    _Divider(config: config),
-                    _SettingsTile(
-                      icon: Icons.workspace_premium_outlined,
-                      label: 'Achievements',
-                      subtitle: 'Stamps earned and still to collect',
-                      config: config,
-                      onTap: _openAchievements,
-                    ),
-                    _Divider(config: config),
-                    _SettingsTile(
-                      icon: Icons.auto_stories_outlined,
-                      label: 'Stories Feed',
-                      subtitle: 'Tastings from travellers you follow',
-                      config: config,
-                      onTap: _openStoriesFeed,
-                    ),
-                    _Divider(config: config),
                     _SettingsTile(
                       icon: Icons.visibility_outlined,
                       label: 'Passport Privacy',

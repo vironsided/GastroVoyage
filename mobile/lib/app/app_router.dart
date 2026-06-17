@@ -15,6 +15,7 @@ import 'package:mobile/features/dashboard/dashboard_screen.dart';
 import 'package:mobile/features/explore/explore_screen.dart';
 import 'package:mobile/features/log/log_tasting_sheet.dart';
 import 'package:mobile/features/map/map_screen.dart';
+import 'package:mobile/features/profile/profile_screen.dart';
 import 'package:mobile/features/social/public_passport_screen.dart';
 import 'package:mobile/features/vault/vault_screen.dart';
 
@@ -56,6 +57,7 @@ class _ShellScreenState extends ConsumerState<_ShellScreen> {
     MapScreen(),
     ExploreScreen(),
     VaultScreen(),
+    ProfileScreen(),
   ];
 
   @override
@@ -128,7 +130,8 @@ class _FloatingNav extends StatelessWidget {
     (icon: LucideIcons.home,     label: 'Home'),
     (icon: LucideIcons.map,      label: 'Map'),
     (icon: LucideIcons.compass,  label: 'Explore'),
-    (icon: LucideIcons.bookOpen, label: 'Journal'),
+    (icon: LucideIcons.bookOpen, label: 'Passport'),
+    (icon: LucideIcons.user,     label: 'You'),
   ];
 
   @override
