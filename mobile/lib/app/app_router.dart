@@ -13,6 +13,7 @@ import 'package:mobile/app/gs_design.dart';
 import 'package:mobile/app/providers.dart';
 import 'package:mobile/features/dashboard/dashboard_screen.dart';
 import 'package:mobile/features/explore/explore_screen.dart';
+import 'package:mobile/features/log/log_tasting_sheet.dart';
 import 'package:mobile/features/map/map_screen.dart';
 import 'package:mobile/features/social/public_passport_screen.dart';
 import 'package:mobile/features/vault/vault_screen.dart';
@@ -88,6 +89,22 @@ class _ShellScreenState extends ConsumerState<_ShellScreen> {
           selectedIndex: index,
           onTap: (i) =>
               ref.read(bottomNavIndexProvider.notifier).state = i,
+        ),
+        // Global "Log a tasting" entry — surfaces the app's core action from
+        // every tab (it used to be reachable only deep inside a dish detail).
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => showLogTastingSheet(context),
+          backgroundColor: config.accent,
+          foregroundColor: config.onPrimary,
+          elevation: 3,
+          icon: const Icon(LucideIcons.plus, size: 20),
+          label: Text(
+            'Log',
+            style: GoogleFonts.hankenGrotesk(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
         ),
       ),
     );

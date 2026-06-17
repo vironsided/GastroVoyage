@@ -20,9 +20,17 @@ import 'package:mobile/features/explore/ingredient_images.dart';
 import 'package:mobile/features/shared/models.dart';
 
 class DishDetailScreen extends ConsumerStatefulWidget {
-  const DishDetailScreen({super.key, required this.country});
+  const DishDetailScreen({
+    super.key,
+    required this.country,
+    this.openLogOnStart = false,
+  });
 
   final Country country;
+
+  /// When true, the log form opens automatically on the first frame — used by
+  /// the global "Log a tasting" entry so the user lands straight in the form.
+  final bool openLogOnStart;
 
   @override
   ConsumerState<DishDetailScreen> createState() => _DishDetailScreenState();
@@ -58,6 +66,16 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
   /// "We were together" tag — only meaningful when the user has an active
   /// couple link. Stored on the visit row (migration 015 `with_partner`).
   bool _withPartner = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openLogOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openLogForm();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -184,7 +202,7 @@ class _DishDetailScreenState extends ConsumerState<DishDetailScreen> {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
-      const SnackBar(content: Text('Claude is reading the photo…')),
+      const SnackBar(content: Text('Reading your photo with AI…')),
     );
     try {
       final suggestion =
