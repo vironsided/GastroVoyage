@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import 'package:mobile/app/gastro_theme_config.dart';
 import 'package:mobile/app/gs_design.dart';
 import 'package:mobile/app/providers.dart';
 import 'package:mobile/features/explore/dish_detail_screen.dart';
@@ -172,8 +171,11 @@ class _LogTastingSheetState extends ConsumerState<_LogTastingSheet> {
                                 size: 16, color: config.accent)
                             : null,
                         onTap: () {
-                          Navigator.of(context).pop();
-                          Navigator.of(context).push(
+                          // Capture the navigator BEFORE popping the sheet so we
+                          // don't call Navigator.of() on a deactivated context.
+                          final navigator = Navigator.of(context);
+                          navigator.pop();
+                          navigator.push(
                             MaterialPageRoute(
                               builder: (_) => DishDetailScreen(
                                   country: c, openLogOnStart: true),
